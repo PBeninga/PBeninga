@@ -117,6 +117,18 @@ for (const view of VIEWS) {
 
   await check('the title screen fits without scrolling', () => overlayFits('the title screen'));
 
+  await check('the build stamp is visible on the title screen', async () => {
+    const tag = await page.evaluate(() => {
+      const n = document.querySelector('#overlay .build-tag');
+      if (!n) return null;
+      return { text: n.textContent.trim(), position: getComputedStyle(n).position };
+    });
+    if (!tag) throw new Error('no build stamp on the overlay');
+    if (!/^build (dev|[0-9a-f]{8})$/.test(tag.text)) throw new Error('stamp read "' + tag.text + '"');
+    // Fixed, or it adds height to panels that have to fit a phone.
+    if (tag.position !== 'fixed') throw new Error('the stamp is in flow: ' + tag.position);
+  });
+
   await check('a save from an incompatible build is dropped, not resumed', async () => {
     await page.evaluate(() => {
       // A realm-1 save claiming a one-sequence quota and holding no cards:
@@ -222,6 +234,11 @@ for (const view of VIEWS) {
     if (await page.evaluate(() => document.querySelectorAll('#board .card.flying').length)) {
       throw new Error('the animation never cleared up');
     }
+  });
+
+  await check('the dock names the build', async () => {
+    const text = await page.evaluate(() => document.querySelector('#seed-tag').textContent);
+    if (!/ · (dev|[0-9a-f]{8})$/.test(text)) throw new Error('dock tag read "' + text + '"');
   });
 
   await check('the hint carousel cycles and reports its position', async () => {

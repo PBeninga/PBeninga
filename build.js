@@ -3,6 +3,7 @@
 // import/export syntax stripped, which is enough for a project this size.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,7 +24,10 @@ const bundle = MODULES
   })
   .join('\n');
 
+// A short content hash, so a player can see at a glance which build they have
+// and whether a cached page is stale.
 const css = readFileSync(join(root, 'src', 'style.css'), 'utf8');
+const build = createHash('sha256').update(bundle).update(css).digest('hex').slice(0, 8);
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 
 const body = html
@@ -31,7 +35,7 @@ const body = html
   .replace(/<\/body>[\s\S]*$/, '')
   .replace(/<script type="module">[\s\S]*?<\/script>\s*/, '');
 
-const script = `<script>\n${bundle}\nboot();\n</script>\n`;
+const script = `<script>\n${bundle.replace('__BUILD__', build)}\nboot();\n</script>\n`;
 const style = `<style>\n${css}</style>\n`;
 const title = (html.match(/<title>([^<]*)<\/title>/) || [, 'Nine Meridians'])[1];
 
@@ -54,5 +58,6 @@ ${body}${script}</body>
 writeFileSync(join(root, 'dist', 'artifact.html'), `<title>${title}</title>\n${style}${body}${script}`);
 
 const size = (p) => (readFileSync(join(root, 'dist', p), 'utf8').length / 1024).toFixed(1);
+console.log(`build ${build}`);
 console.log(`dist/index.html    ${size('index.html')} KB`);
 console.log(`dist/artifact.html ${size('artifact.html')} KB`);

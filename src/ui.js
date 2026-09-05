@@ -6,6 +6,10 @@ import { SUITS, SUIT_GLYPH, SUIT_NAME, RANK_LABEL } from './cards.js';
 import { PATH_BY_KEY } from './paths.js';
 import { randomSeed } from './rng.js';
 
+// Replaced with a content hash by build.js; stays "dev" when running from src.
+const BUILD = '__BUILD__';
+const buildTag = () => (BUILD.startsWith('__') ? 'dev' : BUILD);
+
 const SAVE_KEY = 'nine-meridians/run';
 const BEST_KEY = 'nine-meridians/best';
 
@@ -235,7 +239,7 @@ function renderDock() {
   } else {
     status.appendChild(el('span', '', s.log[0] || ''));
   }
-  $('#seed-tag').textContent = `${game.seed} · ${DIFFICULTIES[game.difficulty].name}`;
+  $('#seed-tag').textContent = `${game.seed} · ${DIFFICULTIES[game.difficulty].name} · ${buildTag()}`;
 
   const undo = $('#btn-undo');
   undo.disabled = s.undosLeft <= 0 || !game.undoStack.length;
@@ -591,6 +595,9 @@ function overlay(html) {
   const o = $('#overlay');
   o.innerHTML = '';
   o.appendChild(html);
+  // Pinned in the corner of every screen, so "am I on a stale cached page?"
+  // is always answerable without opening devtools.
+  o.appendChild(el('div', 'build-tag', `build ${buildTag()}`));
   o.hidden = false;
 }
 
@@ -660,6 +667,8 @@ function pauseScreen() {
   p.appendChild(el('div', 'hanzi-big', '靜坐'));
   p.appendChild(el('h2', '', 'Meditation'));
   p.appendChild(el('p', '', 'The climb waits.'));
+  p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b>`
+    + ` · ${DIFFICULTIES[game.difficulty].name} · build ${buildTag()}`));
   const taken = Object.entries(game.state.boons);
   if (taken.length || game.state.fortune) {
     const list = taken

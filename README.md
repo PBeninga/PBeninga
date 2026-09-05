@@ -90,6 +90,11 @@ per source) keeps the list to a median of seven moves.
 
 `Space` deals · `U` or `Ctrl/⌘+Z` undoes · `H` toggles hints · `Esc` stops them.
 
+Every screen carries a **build stamp** in the bottom-right corner (and in the
+dock beside the seed), so a stale cached page is obvious without opening
+devtools. `npm run build` stamps a content hash; running from `src/` reads
+`dev`.
+
 ## The four paths
 
 Each breakthrough offers the next unclaimed tier of three of the four paths.
@@ -145,7 +150,7 @@ src/paths.js      the four paths and the breakthrough offer
 src/engine.js     realms, boons, stock, undo, move ranking, deadlock — no DOM
 src/ui.js         rendering, drag and drop, overlays — no rules
 src/style.css     ink-wash dark theme
-build.js          inlines the above into dist/index.html
+build.js          inlines the above into dist/index.html, stamped with a hash
 test/*.test.js    node:test suites for cards and engine
 test/browser.mjs  Chromium end-to-end checks across desktop and four devices
 ```

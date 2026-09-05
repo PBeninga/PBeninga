@@ -267,6 +267,13 @@ body.compact-cards .card.down::after { font-size: calc(var(--card-w) * .3); top:
   max-width: 940px; width: 100%; text-align: center;
   animation: rise .3s ease;
 }
+
+/* Pinned to the corner so it never adds height to a panel that has to fit. */
+.build-tag {
+  position: fixed; right: 12px; bottom: 10px;
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text-dim); opacity: .45; pointer-events: none;
+}
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
 
 .panel h1 {
