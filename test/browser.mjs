@@ -373,6 +373,83 @@ for (const view of VIEWS) {
     await unstash(page);
   });
 
+  await check('a wildcard drags out of the deck and costs the board a card', async () => {
+    await hintOff(page);
+    await stash(page);
+    await page.evaluate(() => {
+      const g = window.Ascendant.game;
+      g.state.boons = { talisman: 2 };
+      g.state.wilds = 4;
+      window.Ascendant.render();
+    });
+    await page.waitForTimeout(200);
+    const before = await page.evaluate(() => ({
+      fan: document.querySelectorAll('#wilds .wild-card').length,
+      held: window.Ascendant.game.state.wilds,
+      cards: window.Ascendant.game.state.columns.flat().length + window.Ascendant.game.state.stock.length,
+      stock: window.Ascendant.game.state.stock.length,
+    }));
+    if (before.fan !== 4) throw new Error(`the deck drew ${before.fan} cards for 4 held`);
+
+    const from = await page.locator('#wilds .wild-card').first().boundingBox();
+    const to = await page.locator('.col[data-col="4"]').boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + 120, { steps: 10 });
+    const lit = await page.evaluate(() => document.querySelectorAll('.col.wild-ok').length);
+    if (!lit) throw new Error('no columns offered as targets');
+    await page.mouse.up();
+    await page.waitForTimeout(350);
+
+    const after = await page.evaluate(() => {
+      const g = window.Ascendant.game;
+      const col = g.state.columns[4];
+      return {
+        fan: document.querySelectorAll('#wilds .wild-card').length,
+        held: g.state.wilds,
+        cards: g.state.columns.flat().length + g.state.stock.length,
+        stock: g.state.stock.length,
+        landed: col[col.length - 1].wild,
+        lit: document.querySelectorAll('.col.wild-ok').length,
+      };
+    });
+    if (after.held !== before.held - 1) throw new Error('the wildcard was not spent');
+    if (after.fan !== after.held) throw new Error('the deck does not match what is held');
+    if (!after.landed) throw new Error('nothing landed on the column');
+    if (after.stock !== before.stock - 1) throw new Error('the stock did not pay for it');
+    if (after.cards !== before.cards) {
+      throw new Error(`the board gained a card (${before.cards} -> ${after.cards})`);
+    }
+    if (after.lit) throw new Error('target highlights were left on');
+    await unstash(page);
+  });
+
+  await check('tapping the deck arms a wildcard for the next column tapped', async () => {
+    await hintOff(page);
+    await stash(page);
+    await page.evaluate(() => {
+      window.Ascendant.game.state.wilds = 2;
+      window.Ascendant.render();
+    });
+    await page.click('#wilds');
+    await page.waitForTimeout(180);
+    if (!(await page.evaluate(() => document.querySelector('#wilds').classList.contains('armed')))) {
+      throw new Error('tapping the deck did not arm it');
+    }
+    const before = await page.evaluate(() => window.Ascendant.game.state.wilds);
+    // Stay well inside the board: a fixed offset lands on the dock in landscape.
+    const col = await page.locator('.col[data-col="7"]').boundingBox();
+    await page.mouse.click(col.x + col.width / 2, col.y + Math.min(col.height - 12, 40));
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => ({
+      held: window.Ascendant.game.state.wilds,
+      armed: document.querySelector('#wilds').classList.contains('armed'),
+    }));
+    if (after.held !== before - 1) throw new Error('the armed wildcard was not spent');
+    if (after.armed) throw new Error('the deck stayed armed after spending');
+    await unstash(page);
+  });
+
   await check('the empty-column hint carries the whole run', async () => {
     await hintOff(page);
     await stash(page);

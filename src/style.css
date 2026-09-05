@@ -48,7 +48,7 @@ body {
 
 /* The board owns every touch gesture over it, so a drag is never stolen by
    the page trying to scroll. */
-#board, .card, .cell, .stock-fan { touch-action: none; }
+#board, .card, .cell, .stock-fan, .wild-fan { touch-action: none; }
 
 /* --------------------------------------------------------------- top bar */
 
@@ -124,6 +124,23 @@ body {
   50% { box-shadow: 0 0 0 3px rgba(232,189,106,.3), 0 0 16px rgba(232,189,106,.45); }
 }
 .row-spacer { flex: 1; }
+.wild-fan { display: flex; cursor: grab; padding: 2px; border-radius: 6px; }
+.wild-fan.armed { box-shadow: 0 0 0 2px var(--gold); background: rgba(232,189,106,.12); }
+.wild-card {
+  width: var(--stock-w); height: var(--stock-h); flex: 0 0 auto;
+  margin-left: calc(var(--stock-w) * -0.55); border-radius: 4px;
+  background: linear-gradient(160deg, #2f2450 0%, #1b1636 100%);
+  border: 1px solid var(--gold);
+  box-shadow: -3px 2px 6px rgba(0,0,0,.55), 0 0 10px rgba(232,189,106,.28);
+  display: grid; place-items: center;
+  color: var(--gold); font-size: calc(var(--stock-w) * .5);
+  transition: transform .14s;
+}
+.wild-card:first-child { margin-left: 0; }
+.wild-fan:hover .wild-card { transform: translateY(-3px); }
+/* Columns a wildcard can be spent on. */
+.col.wild-ok { background: rgba(232,189,106,.1); box-shadow: inset 0 0 0 1px var(--gold); }
+
 .stock-count {
   font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
   color: var(--text-dim); white-space: nowrap;
@@ -486,7 +503,8 @@ details.rules-toggle[open] > summary::after { content: ' ▴'; }
   /* Undo the portrait row-card layout: sideways there is width for three
      cards abreast but almost no height to stack them. */
   .offer { flex-direction: row; flex-wrap: nowrap; gap: 10px; margin: 12px 0; }
-  .boon { display: block; text-align: center; width: 215px; padding: 10px 12px; }
+  /* Only two boons are ever offered, so give each the width to wrap less. */
+  .boon { display: block; text-align: center; width: 290px; padding: 9px 12px; }
   .boon .sigil { font-size: 20px; letter-spacing: .2em; }
   .boon .path { font-size: 9px; margin-top: 5px; }
   .boon .name { font-size: 14px; margin: 3px 0 5px; }
@@ -531,7 +549,24 @@ details.rules-toggle[open] > summary::after { content: ' ▴'; }
   .dock-btn .label { font-size: 10px; }
   .cell { width: 36px; height: 46px; font-size: 12px; }
   #stock-row { padding: 4px 8px 0; gap: 6px; }
-  .stock-count { font-size: 9px; }
+  .wild-fan { display: flex; cursor: grab; padding: 2px; border-radius: 6px; }
+.wild-fan.armed { box-shadow: 0 0 0 2px var(--gold); background: rgba(232,189,106,.12); }
+.wild-card {
+  width: var(--stock-w); height: var(--stock-h); flex: 0 0 auto;
+  margin-left: calc(var(--stock-w) * -0.55); border-radius: 4px;
+  background: linear-gradient(160deg, #2f2450 0%, #1b1636 100%);
+  border: 1px solid var(--gold);
+  box-shadow: -3px 2px 6px rgba(0,0,0,.55), 0 0 10px rgba(232,189,106,.28);
+  display: grid; place-items: center;
+  color: var(--gold); font-size: calc(var(--stock-w) * .5);
+  transition: transform .14s;
+}
+.wild-card:first-child { margin-left: 0; }
+.wild-fan:hover .wild-card { transform: translateY(-3px); }
+/* Columns a wildcard can be spent on. */
+.col.wild-ok { background: rgba(232,189,106,.1); box-shadow: inset 0 0 0 1px var(--gold); }
+
+.stock-count { font-size: 9px; }
   :root { --stock-w: 34px; --stock-h: 46px; --dock-h: 56px; }
   #seed-tag { display: none; }
   #status { font-size: 11px; }

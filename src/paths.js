@@ -6,9 +6,10 @@ export const UPGRADES = [
     key: 'talisman',
     name: 'Wildstone',
     sigil: '✦',
-    each: '+2 wildstones',
-    desc: 'Two more wildstones cut into every deal. A wildstone answers to '
-      + 'whatever rank and suit a sequence needs, bound runes included.',
+    each: '+2 wildcards in hand',
+    desc: 'Two more wildcards to spend each rank. Drop one anywhere, rank be '
+      + 'damned. Each takes a card out of the game: the stock first, then a '
+      + 'face-down card, last the card it lands on.',
   },
   {
     key: 'cell',

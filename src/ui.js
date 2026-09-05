@@ -29,6 +29,8 @@ let drag = null;
 let hint = null;             // {moves, index, timers, layer}
 let offsets = { up: 0, down: 0 };
 let shownPhase = 'play';   // so a burst fires on the change, not on every check
+let wildArmed = false;
+let wildDrag = null;
 
 // How far above the fingertip a dragged stack floats, so it stays visible.
 const TOUCH_LIFT = 38;
@@ -140,6 +142,7 @@ function renderTop() {
     cells.appendChild(c);
   });
 
+  renderWilds();
   renderStock();
   renderCore();
 }
@@ -218,6 +221,21 @@ function renderCore() {
   if (!core.classList.contains('bursting')) {
     paintCore(game.state.phase === 'ascended' ? TRANSCENDENT : coreColour(game.state.rank));
   }
+}
+
+/** The wildcards in hand, as a fan you can drag from. */
+function renderWilds() {
+  const s = game.state;
+  const fan = $('#wilds');
+  $('#wilds-wrap').hidden = s.wilds === 0 && !wildArmed;
+  fan.innerHTML = '';
+  for (let i = 0; i < s.wilds; i++) fan.appendChild(el('div', 'wild-card', '✦'));
+  fan.classList.toggle('armed', wildArmed && s.wilds > 0);
+  fan.title = s.wilds
+    ? `${s.wilds} wildcard${s.wilds > 1 ? 's' : ''} — drag onto a column, or tap then tap a column. `
+      + 'Each one takes a card out of the game: off the stock first, then the face-down cards, '
+      + 'and last the card it lands on.'
+    : 'No wildcards left this rank.';
 }
 
 function renderStock() {
@@ -495,6 +513,85 @@ function sealAnimation(seals) {
   setTimeout(() => layer.remove(), sealDuration(seals) + 400);
 }
 
+/** Columns a wildcard could be spent on right now. */
+function markWildTargets(on) {
+  document.querySelectorAll('.col').forEach((colEl) => {
+    colEl.classList.remove('wild-ok');
+    if (!on) return;
+    if (game.wildCost({ zone: 'col', index: Number(colEl.dataset.col) })) colEl.classList.add('wild-ok');
+  });
+}
+
+function spendWild(index) {
+  const result = game.placeWild({ zone: 'col', index });
+  if (!result) return false;
+  wildArmed = false;
+  markWildTargets(false);
+  toast({
+    stock: 'Taken from the stock',
+    hidden: 'A face-down card burned away',
+    replaced: 'The card beneath it consumed',
+  }[result.cost]);
+  afterAction(game.state.lastSealed || []);
+  return true;
+}
+
+function onWildPointerDown(ev) {
+  if (!game || game.state.phase !== 'play' || game.state.wilds <= 0) return;
+  stopHint();
+  wildDrag = { startX: ev.clientX, startY: ev.clientY, active: false, touch: ev.pointerType === 'touch' };
+  window.addEventListener('pointermove', onWildPointerMove);
+  window.addEventListener('pointerup', onWildPointerUp, { once: true });
+  window.addEventListener('pointercancel', onWildCancel, { once: true });
+}
+
+function onWildPointerMove(ev) {
+  if (!wildDrag) return;
+  if (!wildDrag.active) {
+    if (Math.hypot(ev.clientX - wildDrag.startX, ev.clientY - wildDrag.startY) < (wildDrag.touch ? 10 : 7)) return;
+    wildDrag.active = true;
+    const layer = el('div', 'drag-layer');
+    const card = cardEl({ id: 0, rank: 0, suit: 'wild', faceUp: true, wild: true });
+    layer.appendChild(card);
+    document.body.appendChild(layer);
+    wildDrag.layer = layer;
+    wildDrag.node = card;
+    markWildTargets(true);
+  }
+  const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-w'));
+  const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
+  wildDrag.node.style.left = `${ev.clientX - w / 2}px`;
+  wildDrag.node.style.top = `${ev.clientY - h / 2 - (wildDrag.touch ? TOUCH_LIFT : 0)}px`;
+}
+
+function onWildCancel() {
+  window.removeEventListener('pointermove', onWildPointerMove);
+  if (wildDrag && wildDrag.layer) wildDrag.layer.remove();
+  wildDrag = null;
+  markWildTargets(false);
+}
+
+function onWildPointerUp(ev) {
+  window.removeEventListener('pointermove', onWildPointerMove);
+  window.removeEventListener('pointercancel', onWildCancel);
+  if (!wildDrag) return;
+  const d = wildDrag;
+  wildDrag = null;
+  if (d.active) {
+    d.layer.remove();
+    markWildTargets(false);
+    const under = document.elementFromPoint(ev.clientX, ev.clientY - (d.touch ? TOUCH_LIFT : 0));
+    const colEl = under && under.closest('.col');
+    if (colEl) spendWild(Number(colEl.dataset.col));
+    else render();
+    return;
+  }
+  // A tap arms it; the next tap on a column spends it.
+  wildArmed = !wildArmed;
+  render();
+  markWildTargets(wildArmed);
+}
+
 function doDeal() {
   if (!game || !game.canDeal()) return false;
   const before = new Set([...document.querySelectorAll('#board .card')].map((n) => n.dataset.id));
@@ -679,6 +776,14 @@ function cardRef(node) {
 
 function onPointerDown(ev) {
   if (!game || game.state.phase !== 'play') return;
+  if (wildArmed) {
+    const target = ev.target.closest('.col');
+    if (target) { spendWild(Number(target.dataset.col)); return; }
+    wildArmed = false;
+    markWildTargets(false);
+    render();
+    return;
+  }
   const cellEl = ev.target.closest('.cell');
   if (cellEl) return onCellTap(Number(cellEl.dataset.cell));
 
@@ -829,7 +934,9 @@ function rulesHtml() {
       </ul>
       <h3>Boons &amp; Keys</h3>
       <ul>
-        <li><b>Wildstones</b> (✦) stand in for any rank and suit, in a stack or inside a bound rune.</li>
+        <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on any column, ignoring rank. Each
+        <b>takes a card out of the game</b> — the stock first, then a face-down card, last the card
+        it lands on — so the board stays exactly clearable.</li>
         <li>A <b>vault slot</b> holds one card off the board. Drag a card in; tap it to send it back.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
         <li>Stuck? <b>Hint</b> walks every move the position offers, one a
@@ -1044,6 +1151,7 @@ function save() {
 function start(seed, difficulty) {
   stopHint();
   shownPhase = 'play';
+  wildArmed = false;
   game = new Game({ seed, difficulty });
   closeOverlay();
   render();
@@ -1062,6 +1170,7 @@ function bindChrome() {
     else pauseScreen();
   });
   $('#btn-hint').addEventListener('click', () => { if (hint) stopHint(); else startHint(); });
+  $('#wilds').addEventListener('pointerdown', onWildPointerDown);
   $('#board').addEventListener('pointerdown', onPointerDown);
   $('#cells').addEventListener('pointerdown', onPointerDown);
   // Anything the player actually does dismisses a running hint.
@@ -1075,7 +1184,9 @@ function bindChrome() {
   window.addEventListener('orientationchange', () => setTimeout(relayout, 120));
   window.addEventListener('keydown', (e) => {
     if (!game || game.state.phase !== 'play') return;
-    if (e.key === 'Escape') { stopHint(); markTargets(null, false); render(); }
+    if (e.key === 'Escape') {
+      stopHint(); wildArmed = false; markTargets(null, false); markWildTargets(false); render();
+    }
     if (e.key === 'h') { e.preventDefault(); if (hint) stopHint(); else startHint(); return; }
     cancelHint();
     if ((e.key === 'z' && (e.metaKey || e.ctrlKey)) || e.key === 'u') {

@@ -456,19 +456,6 @@ test('both upgrades are offered at every breakthrough, and both repeat', () => {
   assert.equal(g.state.boons.talisman, 3);
 });
 
-test('each Blank Talisman puts two more wilds in the deal', () => {
-  const g = new Game({ seed: 'WILDS', difficulty: 'adept' });
-  assert.equal(g.rankConfig(1).wilds, 0);
-  g.state.boons = { talisman: 1 };
-  assert.equal(g.rankConfig(1).wilds, 2);
-  g.state.boons = { talisman: 3 };
-  assert.equal(g.rankConfig(1).wilds, 6);
-
-  g.dealRank(2);
-  const inPlay = [...g.state.columns.flat(), ...g.state.stock];
-  assert.equal(inPlay.filter((c) => c.wild).length, 6);
-  assert.equal(inPlay.length, g.rankConfig(2).sets * 13 + 6);
-});
 
 test('each Dantian Cell adds one reserve slot, and a slot holds one card', () => {
   const g = new Game({ seed: 'CELLS', difficulty: 'adept' });
@@ -503,14 +490,16 @@ test('a cell that would uncover something keeps the run alive; an idle one does 
   assert.equal(idleCell.hasLegalMove(), false);
 });
 
-test('the deck grows only by realm and talismans', () => {
+test('the deck is nothing but whole sets of spades', () => {
   const g = new Game({ seed: 'DECK', difficulty: 'adept' });
   assert.equal(g.rankConfig(1).columns, BASE_COLUMNS);
   g.state.boons = { talisman: 2, cell: 5 };
   const cfg = g.rankConfig(4);
   assert.equal(cfg.columns, BASE_COLUMNS, 'cells do not add columns');
-  assert.equal(cfg.wilds, 4);
+  assert.equal(cfg.wilds, 0, 'wildcards are held, never shuffled in');
   assert.equal(cfg.required, cfg.sets);
+  g.dealRank(4);
+  assert.equal(g.state.columns.flat().length + g.state.stock.length, cfg.sets * 13);
 });
 
 test('sealing records what left the board and where it sat', () => {
@@ -560,9 +549,10 @@ test('every card is a spade, at every rank and difficulty', () => {
       g.dealRank(rank);
       assert.equal(g.rankConfig(rank).suitCount, 1);
       const all = [...g.state.columns.flat(), ...g.state.stock];
-      const suits = new Set(all.filter((c) => !c.wild).map((c) => c.suit));
+      const suits = new Set(all.map((c) => c.suit));
       assert.deepEqual([...suits], ['spade'], `${difficulty} rank ${rank}`);
-      assert.equal(all.filter((c) => c.wild).length, 4, 'wildstones are still dealt');
+      assert.equal(all.filter((c) => c.wild).length, 0, 'no wildcards in the deal');
+      assert.equal(g.state.wilds, 4, 'they are in hand instead');
     }
   }
 });
@@ -627,4 +617,97 @@ test('with the stock spent, an empty column is the last resort', () => {
   const s = g.suggest();
   assert.equal(s.kind, 'empty', 'better than declaring the run over');
   assert.equal(g.hasLegalMove(), true);
+});
+
+test('each Wildstone boon puts two wildcards in hand, refreshed each rank', () => {
+  const g = new Game({ seed: 'HAND', difficulty: 'adept' });
+  assert.equal(g.state.wilds, 0);
+  g.state.boons = { talisman: 3 };
+  g.dealRank(2);
+  assert.equal(g.state.wilds, 6);
+  g.state.wilds = 1;
+  g.dealRank(3);
+  assert.equal(g.state.wilds, 6, 'a fresh rank restores the hand');
+});
+
+test('a wildcard costs the stock a card before anything else', () => {
+  const g = new Game({ seed: 'COSTA', difficulty: 'adept' });
+  g.state.boons = { talisman: 1 };
+  g.dealRank(1);
+  const total = () => g.state.columns.flat().length + g.state.stock.length;
+  const before = { cards: total(), stock: g.state.stock.length, deals: g.dealsLeft() };
+
+  const r = g.placeWild({ zone: 'col', index: 3 });
+  assert.equal(r.cost, 'stock');
+  assert.equal(g.state.stock.length, before.stock - 1);
+  assert.equal(total(), before.cards, 'a card left the game as one arrived');
+  assert.equal(g.state.wilds, 1);
+  const placed = g.state.columns[3][g.state.columns[3].length - 1];
+  assert.equal(placed.wild, true);
+  assert.equal(placed.faceUp, true);
+});
+
+test('with the stock spent, a wildcard burns the worst face-down card', () => {
+  const g = rigged([
+    [makeCard(2, 'spade', false), up(9, 'spade')],
+    [makeCard(3, 'spade', false), makeCard(4, 'spade', false), makeCard(5, 'spade', false), up(8, 'spade')],
+    [up(4, 'spade')],
+  ], { wilds: 1 });
+  const buried = () => g.state.columns.flat().filter((c) => !c.faceUp).length;
+  assert.equal(buried(), 4);
+
+  const r = g.placeWild({ zone: 'col', index: 2 });
+  assert.equal(r.cost, 'hidden');
+  assert.equal(g.state.columns[1].length, 3, 'it came out of the most buried column');
+  assert.equal(r.removed.rank, 5, 'and it was the one nearest to being turned over');
+  assert.equal(buried(), 3, 'the dig is one shorter');
+  assert.equal(g.state.columns[2].length, 2, 'and the wildcard landed where it was put');
+});
+
+test('with nothing hidden either, a wildcard consumes the card it lands on', () => {
+  const g = rigged([[up(9, 'spade'), up(4, 'spade')], [up(2, 'spade')]], { wilds: 1 });
+  const r = g.placeWild({ zone: 'col', index: 0 });
+  assert.equal(r.cost, 'replaced');
+  assert.equal(r.removed.rank, 4, 'the card it landed on');
+  assert.equal(g.state.columns[0].length, 2);
+  assert.equal(g.state.columns[0][1].wild, true);
+});
+
+test('a wildcard cannot be paid for onto an empty column with nothing left', () => {
+  const g = rigged([[up(9, 'spade')], []], { wilds: 1 });
+  assert.equal(g.wildCost({ zone: 'col', index: 1 }), null);
+  assert.equal(g.placeWild({ zone: 'col', index: 1 }), false);
+  assert.equal(g.state.wilds, 1, 'and the wildcard is not spent');
+});
+
+test('placing a wildcard ignores rank entirely', () => {
+  const g = rigged([[up(2, 'spade')], [up(9, 'spade')]], { wilds: 1, stock: [makeCard(7, 'spade')] });
+  assert.equal(g.placeWild({ zone: 'col', index: 0 }).cost, 'stock');
+  assert.equal(g.state.columns[0].length, 2, 'a wildcard sat on a 2');
+});
+
+test('wildcards keep the board exactly clearable', () => {
+  const g = new Game({ seed: 'CLEAR', difficulty: 'adept' });
+  g.state.boons = { talisman: 3 };
+  g.dealRank(1);
+  const cfg = g.rankConfig(1);
+  const total = () => g.state.columns.flat().length + g.state.stock.length;
+  assert.equal(total(), cfg.sets * 13);
+  for (let i = 0; i < 6; i++) g.placeWild({ zone: 'col', index: i % 10 });
+  assert.equal(g.state.wilds, 0);
+  assert.equal(total(), cfg.sets * 13, 'six wildcards spent, not one card gained');
+  assert.equal(g.state.required * 13, total(), 'the runes required still account for every card');
+});
+
+test('spending a wildcard is undoable', () => {
+  const g = new Game({ seed: 'UNDOWILD', difficulty: 'adept' });
+  g.state.boons = { talisman: 1 };
+  g.dealRank(1);
+  const before = JSON.stringify(g.state.columns.map((c) => c.map((x) => x.id)));
+  const stock = g.state.stock.length;
+  g.placeWild({ zone: 'col', index: 0 });
+  assert.equal(g.undo(), true);
+  assert.equal(g.state.wilds, 2);
+  assert.equal(g.state.stock.length, stock);
+  assert.equal(JSON.stringify(g.state.columns.map((c) => c.map((x) => x.id))), before);
 });

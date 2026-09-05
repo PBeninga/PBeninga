@@ -3,7 +3,7 @@
 import { makeRng, shuffle, randomSeed } from './rng.js';
 import {
   SUITS, KING, SEQUENCE_LENGTH, buildDeck, runInfo, canStackOn,
-  completedRune, movableTail, resetCardIds, bumpCardIds,
+  completedRune, movableTail, resetCardIds, bumpCardIds, makeWild,
 } from './cards.js';
 import { offerBoons } from './paths.js';
 
@@ -55,6 +55,7 @@ export class Game {
       reserve: [],
       stock: [],
       boons: {},              // upgrade key -> how many times taken
+      wilds: 0,               // wildcards in hand, refreshed each rank
       undosLeft: UNDOS_PER_RANK,
       moves: 0,
       offer: [],
@@ -77,7 +78,9 @@ export class Game {
       sets,
       suitCount: 1,              // spades, all the way down
       columns: BASE_COLUMNS,
-      wilds: this.held('talisman') * 2,
+      // The deck is nothing but spades. Wildcards are held, not shuffled in,
+      // so the deal is exactly sets x 13 and clears exactly.
+      wilds: 0,
     };
   }
 
@@ -107,6 +110,7 @@ export class Game {
     s.columns = columns;
     s.stock = deck;
     s.reserve = Array.from({ length: this.reserveCells() }, () => null);
+    s.wilds = this.held('talisman') * 2;
     s.undosLeft = UNDOS_PER_RANK;
     s.phase = 'play';
     s.offer = [];
@@ -247,6 +251,72 @@ export class Game {
     return cols ? Math.ceil(this.state.stock.length / cols) : 0;
   }
 
+  // ------------------------------------------------------------ wildcards
+
+  /**
+   * The face-down card nearest to being turned over, in whichever column has
+   * the most of them -- so a wildcard's cost lands on the worst dig.
+   */
+  nextHidden() {
+    const s = this.state;
+    let best = null;
+    for (let i = 0; i < s.columns.length; i++) {
+      const col = s.columns[i];
+      let count = 0;
+      let last = -1;
+      for (let k = 0; k < col.length; k++) if (!col[k].faceUp) { count++; last = k; }
+      if (count && (!best || count > best.count)) best = { column: i, index: last, count };
+    }
+    return best;
+  }
+
+  /** What placing a wildcard on `to` would cost, or null if it cannot be paid. */
+  wildCost(to) {
+    const s = this.state;
+    if (s.phase !== 'play' || s.wilds <= 0) return null;
+    if (!to || to.zone !== 'col' || !s.columns[to.index]) return null;
+    if (s.stock.length) return { cost: 'stock' };
+    const hidden = this.nextHidden();
+    if (hidden) return { cost: 'hidden', ...hidden };
+    const col = s.columns[to.index];
+    if (col.length && col[col.length - 1].faceUp) return { cost: 'replaced' };
+    return null;
+  }
+
+  /**
+   * Spend a held wildcard onto a column. Every wildcard placed takes exactly
+   * one card out of the game, so the deal stays exactly clearable however many
+   * are used. The cost comes off the undealt stock first -- a later row simply
+   * comes up a card short -- then the face-down cards, and only when neither is
+   * left does it fall on the face-up card the wildcard lands on.
+   *
+   * Placement ignores rank: a wildcard goes wherever you put it.
+   *
+   * @returns {false|{cost:'stock'|'hidden'|'replaced', removed:object}}
+   */
+  placeWild(to) {
+    const s = this.state;
+    const plan = this.wildCost(to);
+    if (!plan) return false;
+
+    this.pushUndo();
+    let removed;
+    if (plan.cost === 'stock') removed = s.stock.pop();
+    else if (plan.cost === 'hidden') removed = s.columns[plan.column].splice(plan.index, 1)[0];
+    else removed = s.columns[to.index].pop();
+
+    s.columns[to.index].push(makeWild(true));
+    s.wilds--;
+    s.moves++;
+    this.log({
+      stock: 'A wildcard takes a card from the undealt stock.',
+      hidden: 'A wildcard burns away a face-down card.',
+      replaced: 'A wildcard consumes the card it lands on.',
+    }[plan.cost]);
+    this.settle();
+    return { cost: plan.cost, removed };
+  }
+
   // ---------------------------------------------------------- resolution
 
   /** Flip exposed cards, bind finished runes, then check win/loss. */
@@ -305,6 +375,7 @@ export class Game {
    */
   hasLegalMove() {
     const s = this.state;
+    if (s.wilds > 0 && this.wildCost({ zone: 'col', index: 0 })) return true;
     if (s.reserve.some((r) => r === null)
       && s.columns.some((c) => c.length === 1 || (c.length > 1 && !c[c.length - 2].faceUp))) return true;
     return this.suggest().kind !== 'over';
@@ -549,6 +620,7 @@ export function deserialize(json) {
   game.difficulty = data.difficulty;
   game.rng = makeRng(data.seed);
   game.rng.setState(data.rng);
+  if (typeof state.wilds !== 'number') state.wilds = 0;
   game.state = state;
   game.undoStack = [];
 
