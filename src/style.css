@@ -434,7 +434,12 @@ body.compact-cards .card.down::after { font-size: calc(var(--card-w) * .3); top:
 .big { padding: 12px 34px; font-size: 16px; letter-spacing: .12em; border-color: var(--gold-dim); color: var(--gold); }
 .big:hover:not(:disabled) { background: rgba(232,189,106,.14); border-color: var(--gold); color: var(--gold); }
 
-.rules { text-align: left; max-width: 720px; margin: 22px auto 0; column-gap: 30px; }
+/* Capped so the rules can grow without shoving a panel past the viewport --
+   which they have done twice now. */
+.rules {
+  text-align: left; max-width: 720px; margin: 22px auto 0; column-gap: 30px;
+  max-height: min(44vh, 400px); overflow-y: auto;
+}
 .rules { columns: 2; }
 @media (max-width: 700px) { .rules { columns: 1; } }
 .rules h3 { color: var(--aether); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; margin: 16px 0 6px; font-weight: 400; }

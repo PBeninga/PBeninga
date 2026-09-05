@@ -711,3 +711,54 @@ test('spending a wildcard is undoable', () => {
   assert.equal(g.state.stock.length, stock);
   assert.equal(JSON.stringify(g.state.columns.map((c) => c.map((x) => x.id))), before);
 });
+
+test('a placed wildcard fixes to one below the card it lands on', () => {
+  const g = rigged([[up(9, 'spade')], [up(4, 'spade')]], { wilds: 2, stock: [makeCard(7, 'spade')] });
+  assert.deepEqual(g.wildValue(0), { rank: 8, suit: 'spade' });
+  g.placeWild({ zone: 'col', index: 0 });
+  const placed = g.state.columns[0][1];
+  assert.equal(placed.wild, true, 'still marked as a wildcard');
+  assert.equal(placed.rank, 8);
+  assert.equal(placed.suit, 'spade');
+});
+
+test('a wildcard in an empty column fixes to a King', () => {
+  const g = rigged([[up(9, 'spade')], []], { wilds: 1, stock: [makeCard(7, 'spade')] });
+  g.placeWild({ zone: 'col', index: 1 });
+  assert.equal(g.state.columns[1][0].rank, 13);
+});
+
+test('nothing goes below an Ace, so no wildcard lands on one', () => {
+  const g = rigged([[up(1, 'spade')], [up(5, 'spade')]], { wilds: 1, stock: [makeCard(7, 'spade')] });
+  assert.equal(g.wildValue(0), null);
+  assert.equal(g.wildCost({ zone: 'col', index: 0 }), null);
+  assert.equal(g.placeWild({ zone: 'col', index: 0 }), false);
+  assert.equal(g.state.wilds, 1);
+  assert.ok(g.wildCost({ zone: 'col', index: 1 }), 'other columns are still fine');
+});
+
+test('a replacing wildcard reads the card that will be under it', () => {
+  const g = rigged([[up(9, 'spade'), up(4, 'spade')], [up(2, 'spade')]], { wilds: 1 });
+  const plan = g.wildCost({ zone: 'col', index: 0 });
+  assert.equal(plan.cost, 'replaced');
+  assert.equal(plan.value.rank, 8, 'one below the 9 it will sit on, not the 4 it eats');
+  g.placeWild({ zone: 'col', index: 0 });
+  assert.equal(g.state.columns[0][1].rank, 8);
+});
+
+test('a fixed wildcard is read as its rank, not as a gap filler', () => {
+  const g = rigged([[up(9, 'spade'), makeWild(true, 8, 'spade'), up(7, 'spade')], [up(3, 'spade')]]);
+  // Reads as a plain 9-8-7 run.
+  assert.equal(g.columnTail(0), 3);
+  // And it no longer takes just anything on top of it.
+  assert.equal(g.canDrop([up(3, 'spade')], { zone: 'col', index: 0 }), false);
+  assert.equal(g.canDrop([up(6, 'spade')], { zone: 'col', index: 0 }), true);
+});
+
+test('a fixed wildcard can complete a rune as its rank', () => {
+  const col = [];
+  for (let r = 13; r >= 2; r--) col.push(r === 7 ? makeWild(true, 7, 'spade') : up(r, 'spade'));
+  const g = rigged([col, [up(1, 'spade')], [up(9, 'spade')], [up(8, 'heart')]]);
+  g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
+  assert.equal(g.state.totalRunes, 1);
+});

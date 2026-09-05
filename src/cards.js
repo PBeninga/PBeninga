@@ -20,13 +20,23 @@ export function makeCard(rank, suit, faceUp = false) {
   return { id: nextId++, rank, suit, faceUp, wild: false };
 }
 
-export function makeWild(faceUp = false) {
-  return { id: nextId++, rank: 0, suit: 'wild', faceUp, wild: true };
+/**
+ * A wildcard. Unfixed (rank 0) it fills whatever gap it sits in; once placed it
+ * is given a rank and a suit and is a card like any other, marked only so you
+ * can see where it came from.
+ */
+export function makeWild(faceUp = false, rank = 0, suit = 'wild') {
+  return { id: nextId++, rank, suit, faceUp, wild: true };
+}
+
+/** A wildcard still free to be anything. Placed ones never are. */
+export function isFlexible(card) {
+  return card.wild && card.rank === 0;
 }
 
 export function cardLabel(card) {
-  if (card.wild) return '✦';
-  return RANK_LABEL[card.rank] + SUIT_GLYPH[card.suit];
+  if (isFlexible(card)) return '✦';
+  return RANK_LABEL[card.rank] + (card.wild ? '✦' : SUIT_GLYPH[card.suit]);
 }
 
 /**
@@ -48,8 +58,9 @@ export function buildDeck({ sets, suitCount, wilds = 0 }, rng) {
  * Inspect a candidate run. `cards[0]` is the highest card (nearest the top of
  * the pile); each following card sits one rank lower.
  *
- * Wild cards are gap fillers: they adopt whatever rank and suit the run needs
- * at their position. A run of nothing but wilds is valid and unconstrained.
+ * An unfixed wildcard is a gap filler: it adopts whatever rank and suit the run
+ * needs at its position. Once a wildcard has been placed it carries a real rank
+ * and is read like any other card.
  *
  * @returns {{valid:boolean, suit:string|null, topRank:number|null}}
  *   `suit`/`topRank` are null when only wilds pinned them down.
@@ -64,7 +75,7 @@ export function runInfo(cards, { sameSuit = true } = {}) {
   let anchorIndex = 0;
   for (let i = 0; i < cards.length; i++) {
     const c = cards[i];
-    if (c.wild) continue;
+    if (isFlexible(c)) continue;
     if (anchorRank === null) {
       anchorRank = c.rank;
       anchorIndex = i;
@@ -95,7 +106,7 @@ export function effectiveRank(info, index) {
 export function canStackOn(runTopInfo, run, target) {
   if (!target) return true;
   if (!target.faceUp) return false;
-  if (target.wild || run[0].wild) return true;
+  if (isFlexible(target) || isFlexible(run[0])) return true;
   if (runTopInfo.topRank === null) return true;
   return runTopInfo.topRank === target.rank - 1;
 }

@@ -135,7 +135,7 @@ run ever asks is how to split five picks between them.
 
 | | | |
 |---|---|---|
-| ✦ **Wildstone** | +2 wildcards in hand each rank | Drop one on any column, ignoring rank; each takes a card out of the game |
+| ✦ **Wildstone** | +2 wildcards in hand each rank | Drop one on any column; it fixes to one below what it lands on, and takes a card out of the game |
 | ❖ **Vault Slot** | +1 vault slot | Holds a single card off the board, for as long as you need it out of the way |
 
 They solve different problems. Wildstones fix the board you were dealt — a gap
@@ -207,6 +207,6 @@ Known open questions:
   a clean decision but a shallow one; it may want a third option.
 - A tap has no way to reach a reserve cell; that is drag-only on purpose, but
   it may want a gesture of its own.
-- Nothing tells you what a wildcard is about to cost before you spend it. The
-  deck's tooltip explains the order, but the board does not show which card
-  would go.
+- Nothing tells you what a wildcard is about to cost, or what rank it will
+  take, before you spend it. The deck's tooltip explains the order; the board
+  shows neither the card that would go nor the value that would be taken.

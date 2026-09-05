@@ -404,18 +404,26 @@ for (const view of VIEWS) {
     const after = await page.evaluate(() => {
       const g = window.Ascendant.game;
       const col = g.state.columns[4];
+      const node = document.querySelector('.col[data-col="4"] .card:last-child');
       return {
         fan: document.querySelectorAll('#wilds .wild-card').length,
         held: g.state.wilds,
         cards: g.state.columns.flat().length + g.state.stock.length,
         stock: g.state.stock.length,
-        landed: col[col.length - 1].wild,
+        landed: { wild: col[col.length - 1].wild, rank: col[col.length - 1].rank },
+        expected: col.length > 1 ? col[col.length - 2].rank - 1 : 13,
+        face: node ? node.textContent : '',
         lit: document.querySelectorAll('.col.wild-ok').length,
       };
     });
     if (after.held !== before.held - 1) throw new Error('the wildcard was not spent');
     if (after.fan !== after.held) throw new Error('the deck does not match what is held');
-    if (!after.landed) throw new Error('nothing landed on the column');
+    if (!after.landed.wild) throw new Error('nothing landed on the column');
+    if (!after.landed.rank) throw new Error('the wildcard was left without a fixed value');
+    if (after.landed.rank !== after.expected) {
+      throw new Error(`fixed to ${after.landed.rank}, expected ${after.expected}`);
+    }
+    if (!/\d|[AJQK]/.test(after.face)) throw new Error('the card face does not show its value');
     if (after.stock !== before.stock - 1) throw new Error('the stock did not pay for it');
     if (after.cards !== before.cards) {
       throw new Error(`the board gained a card (${before.cards} -> ${after.cards})`);

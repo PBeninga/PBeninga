@@ -7,9 +7,9 @@ export const UPGRADES = [
     name: 'Wildstone',
     sigil: '✦',
     each: '+2 wildcards in hand',
-    desc: 'Two more wildcards to spend each rank. Drop one anywhere, rank be '
-      + 'damned. Each takes a card out of the game: the stock first, then a '
-      + 'face-down card, last the card it lands on.',
+    desc: 'Two more each rank. Drop one anywhere; it fixes to one below what '
+      + 'it lands on. Each takes a card out of the game: stock, then a '
+      + 'face-down card, then the card beneath it.',
   },
   {
     key: 'cell',

@@ -2,8 +2,8 @@
 
 import { makeRng, shuffle, randomSeed } from './rng.js';
 import {
-  SUITS, KING, SEQUENCE_LENGTH, buildDeck, runInfo, canStackOn,
-  completedRune, movableTail, resetCardIds, bumpCardIds, makeWild,
+  SUITS, SEQUENCE_LENGTH, buildDeck, runInfo, canStackOn,
+  completedRune, movableTail, resetCardIds, bumpCardIds, makeWild, KING, RANK_LABEL,
 } from './cards.js';
 import { offerBoons } from './paths.js';
 
@@ -270,17 +270,45 @@ export class Game {
     return best;
   }
 
+  /**
+   * The rank a wildcard would take on this column, or null if none is legal.
+   * It becomes whatever the position asks for: one below the card it lands on,
+   * or a King in an empty column. Nothing continues below an Ace, so a
+   * wildcard cannot be dropped on one.
+   *
+   * `replacing` says the wildcard is about to consume the foot card, so it
+   * reads the card that will be underneath it instead.
+   */
+  wildValue(index, { replacing = false } = {}) {
+    const col = this.state.columns[index];
+    if (!col) return null;
+    const beneath = col[col.length - (replacing ? 2 : 1)];
+    if (!beneath) return { rank: KING, suit: SUITS[0] };
+    if (!beneath.faceUp) return null;
+    const rank = beneath.rank - 1;
+    if (rank < 1) return null;
+    return { rank, suit: beneath.wild ? beneath.suit : beneath.suit };
+  }
+
   /** What placing a wildcard on `to` would cost, or null if it cannot be paid. */
   wildCost(to) {
     const s = this.state;
     if (s.phase !== 'play' || s.wilds <= 0) return null;
     if (!to || to.zone !== 'col' || !s.columns[to.index]) return null;
-    if (s.stock.length) return { cost: 'stock' };
+
+    if (s.stock.length) {
+      const value = this.wildValue(to.index);
+      return value ? { cost: 'stock', value } : null;
+    }
     const hidden = this.nextHidden();
-    if (hidden) return { cost: 'hidden', ...hidden };
+    if (hidden) {
+      const value = this.wildValue(to.index);
+      return value ? { cost: 'hidden', ...hidden, value } : null;
+    }
     const col = s.columns[to.index];
-    if (col.length && col[col.length - 1].faceUp) return { cost: 'replaced' };
-    return null;
+    if (!col.length || !col[col.length - 1].faceUp) return null;
+    const value = this.wildValue(to.index, { replacing: true });
+    return value ? { cost: 'replaced', value } : null;
   }
 
   /**
@@ -290,7 +318,10 @@ export class Game {
    * comes up a card short -- then the face-down cards, and only when neither is
    * left does it fall on the face-up card the wildcard lands on.
    *
-   * Placement ignores rank: a wildcard goes wherever you put it.
+   * Placement ignores the rank you are dropping it on, but the wildcard takes
+   * a rank of its own the moment it lands -- one below whatever it now sits on,
+   * or a King in an empty column -- and is an ordinary card from then on. An
+   * Ace has nothing below it, so a wildcard cannot be dropped on one.
    *
    * @returns {false|{cost:'stock'|'hidden'|'replaced', removed:object}}
    */
@@ -305,14 +336,14 @@ export class Game {
     else if (plan.cost === 'hidden') removed = s.columns[plan.column].splice(plan.index, 1)[0];
     else removed = s.columns[to.index].pop();
 
-    s.columns[to.index].push(makeWild(true));
+    s.columns[to.index].push(makeWild(true, plan.value.rank, plan.value.suit));
     s.wilds--;
     s.moves++;
     this.log({
       stock: 'A wildcard takes a card from the undealt stock.',
       hidden: 'A wildcard burns away a face-down card.',
       replaced: 'A wildcard consumes the card it lands on.',
-    }[plan.cost]);
+    }[plan.cost] + ` It settles as ${RANK_LABEL[plan.value.rank]}.`);
     this.settle();
     return { cost: plan.cost, removed };
   }

@@ -42,7 +42,10 @@ function cardEl(card) {
   if (card.faceUp) {
     if (card.wild) {
       n.classList.add('wild');
-      n.innerHTML = '<span class="corner">✦</span><span class="center">✦</span>';
+      // A placed wildcard carries its fixed rank; one still in hand does not.
+      const label = card.rank ? RANK_LABEL[card.rank] : '';
+      n.innerHTML = `<span class="corner">${label}<span class="s">✦</span></span>`
+        + '<span class="center">✦</span>';
     } else {
       if (card.suit === 'heart' || card.suit === 'diamond') n.classList.add('red');
       const g = SUIT_GLYPH[card.suit];
@@ -55,7 +58,9 @@ function cardEl(card) {
 
 function miniLabel(card) {
   if (!card) return '';
-  if (card.wild) return '<span style="color:var(--gold)">✦</span>';
+  if (card.wild) {
+    return `<span style="color:var(--gold)">${card.rank ? RANK_LABEL[card.rank] : ''}✦</span>`;
+  }
   const red = card.suit === 'heart' || card.suit === 'diamond';
   return `<span style="color:${red ? 'var(--cinnabar)' : 'var(--paper)'}">`
     + `${RANK_LABEL[card.rank]}${SUIT_GLYPH[card.suit]}</span>`;
@@ -233,8 +238,9 @@ function renderWilds() {
   fan.classList.toggle('armed', wildArmed && s.wilds > 0);
   fan.title = s.wilds
     ? `${s.wilds} wildcard${s.wilds > 1 ? 's' : ''} — drag onto a column, or tap then tap a column. `
-      + 'Each one takes a card out of the game: off the stock first, then the face-down cards, '
-      + 'and last the card it lands on.'
+      + 'It fixes to one rank below whatever it lands on (a King in an empty column) and is an '
+      + 'ordinary card from then on. Each one takes a card out of the game: off the stock first, '
+      + 'then the face-down cards, and last the card it lands on.'
     : 'No wildcards left this rank.';
 }
 
@@ -934,9 +940,11 @@ function rulesHtml() {
       </ul>
       <h3>Boons &amp; Keys</h3>
       <ul>
-        <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on any column, ignoring rank. Each
-        <b>takes a card out of the game</b> — the stock first, then a face-down card, last the card
-        it lands on — so the board stays exactly clearable.</li>
+        <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on any column, ignoring rank; it then
+        <b>fixes</b> to one below whatever it sits on (a King in an empty column) and is an ordinary
+        card after that. Nothing goes below an Ace, so no wildcard lands on one.</li>
+        <li>Each wildcard <b>takes a card out of the game</b> — the stock first, then a face-down
+        card, last the card it lands on — so the board stays exactly clearable.</li>
         <li>A <b>vault slot</b> holds one card off the board. Drag a card in; tap it to send it back.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
         <li>Stuck? <b>Hint</b> walks every move the position offers, one a
