@@ -54,8 +54,10 @@ Standard Spider, with two additions.
 
 - Build **down by rank** onto any card; suit is irrelevant while stacking.
 - Lift a group only when it is a **descending run of a single suit**.
-- Empty columns accept anything. The stock deals one card to every column, and
-  only when no column stands empty.
+- Empty columns accept anything, and the stock deals one card to every column,
+  empty ones included. Spider forbids dealing while a column stands empty; that
+  rule is dropped here, because a realm only ends once the board is clear, so
+  every meridian you seal would otherwise strand the stock.
 - A **K→A run of one suit** at the foot of a column seals itself as a meridian
   and leaves play.
 - **Chaos talismans** (☯) are wild: they adopt whatever rank and suit the run
@@ -81,12 +83,23 @@ because that run is thirteen long. Only after run length do ties break on
 flipping a face-down card, emptying a column, and finally on not wasting an
 empty column.
 
-**Hint** at the bottom walks every move the position offers, one a second, best
-first — a translucent copy of the cards drifts to exactly where it would land,
-with the source and destination lit, and the dock counts `Showing hint 3/8`.
-It loops until you do anything at all, at which point it gets out of the way.
-Deduplication (the best lift per source-and-destination pair, one empty column
-per source) keeps the list to a median of seven moves.
+**Hint** at the bottom walks the moves worth making, one a second — a
+translucent copy of the cards drifts to exactly where it would land, source and
+destination lit, and the dock counts `Showing hint 3/8`. It loops until you do
+anything at all, then gets out of the way.
+
+It only offers moves that are actually worth something, in this order:
+
+1. **moves that seal a meridian** — worth splitting a run for, so these come first
+2. **moves that carry a whole run**, never breaking one up to no purpose
+3. failing both, **moves into an empty column**
+4. failing that, **deal another row** — the stock pulses instead of a card flying
+5. failing that, **the run is over**
+
+That last rung is also the game-over test: a realm ends when every card is
+sealed, or when the chain runs out. A charged technique or a reserve cell that
+would uncover something still counts as a way out, so those never end a run by
+surprise.
 
 `Space` deals · `U` or `Ctrl/⌘+Z` undoes · `H` toggles hints · `Esc` stops them.
 
@@ -105,11 +118,11 @@ Tiers are taken in order and are permanent for the run.
 | **靈符 Talismans** | +2 wilds per deal | +2 more, always face up | +2 more; awaken a card into a wild, once per realm |
 | **斬道 Severance** | one fewer suit in every deal | change a card's suit, twice per realm | one fewer suit again; +1 transmutation |
 | **虛步 Void** | +1 reserve cell | place any card on any card, twice per realm | +1 cell, +2 void steps, and mixed-suit runs move as groups |
-| **開脈 Expansion** | +1 column | +1 column; each realm starts with one empty | +1 column; deal from the stock even with empty columns |
+| **開脈 Expansion** | +1 column | +1 column; each realm starts with one empty | +1 column; the deal skips your empty columns, leaving them open |
 
-The paths pull against each other. Expansion III lets you deal over empty
-columns — which matters precisely because Expansion II hands you an empty
-column every realm and the base rule forbids dealing while one exists.
+An empty column is the most valuable thing on the board, and Expansion plays
+both sides of that: II hands you one at the start of every realm, and III stops
+the stock from filling the ones you have fought for.
 
 ## On phones
 
@@ -147,7 +160,7 @@ index.html        page shell
 src/rng.js        seeded mulberry32 — a seed reproduces a whole run
 src/cards.js      card model, run validation, wild-card gap filling
 src/paths.js      the four paths and the breakthrough offer
-src/engine.js     realms, boons, stock, undo, move ranking, deadlock — no DOM
+src/engine.js     realms, boons, stock, undo, move ranking, suggestions — no DOM
 src/ui.js         rendering, drag and drop, overlays — no rules
 src/style.css     ink-wash dark theme
 build.js          inlines the above into dist/index.html, stamped with a hash
@@ -167,13 +180,14 @@ lookahead, random boon choices, never touches reserve cells or charges), over
 
 | | clears realm 1 | avg realm reached | ascended |
 |---|---|---|---|
-| Novice | 30% | 1.4 | 0/60 |
-| Adept | 42% | 1.5 | 0/60 |
-| Immortal | 42% | 1.6 | 0/60 |
+| Novice | 35% | 1.5 | 0/60 |
+| Adept | 43% | 1.6 | 0/60 |
 
-The bot is much weaker than a person — a one-suit board is very winnable by
-hand — so read these as a floor, not a forecast. But the shape is real: under
-the old quota the same bot reached realm 3–4, and it now stalls at 1–2.
+(Measured after the stock stopped being blocked by empty columns, which lifted
+every figure a little.) The bot is much weaker than a person — a one-suit board
+is very winnable by hand — so read these as a floor, not a forecast. But the
+shape is real: under the old quota the same bot reached realm 3–4, and it now
+stalls at 1–2.
 
 Two things follow, and both are yours to call:
 

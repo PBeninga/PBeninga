@@ -84,7 +84,8 @@ export class Game {
 
   mixedSuitMoves() { return this.tier('void') >= 3; }
   wildsFaceUp() { return this.tier('talisman') >= 2; }
-  mayDealOverEmpties() { return this.tier('expansion') >= 3; }
+  /** Boundless Field: the deal leaves your hard-won empty columns alone. */
+  dealSkipsEmpties() { return this.tier('expansion') >= 3; }
 
   freshCharges() {
     const v = this.tier('void');
@@ -238,13 +239,19 @@ export class Game {
     return true;
   }
 
-  /** Deal one card onto every column. */
+  /**
+   * Deal one card onto every column, empty ones included. Spider forbids
+   * dealing while a column stands empty; here a realm is only over once the
+   * board is clear, so that rule would strand the stock every time a meridian
+   * sealed.
+   */
   deal() {
     const s = this.state;
-    if (s.phase !== 'play' || !s.stock.length) return false;
-    if (!this.mayDealOverEmpties() && s.columns.some((c) => c.length === 0)) return false;
+    if (!this.canDeal()) return false;
     this.pushUndo();
-    for (let i = 0; i < s.columns.length && s.stock.length; i++) {
+    const targets = this.dealTargets();
+    for (const i of targets) {
+      if (!s.stock.length) break;
       const card = s.stock.pop();
       card.faceUp = true;
       s.columns[i].push(card);
@@ -255,10 +262,17 @@ export class Game {
     return true;
   }
 
-  canDeal() {
+  /** Which columns the next deal would land in. */
+  dealTargets() {
     const s = this.state;
-    return s.phase === 'play' && s.stock.length > 0
-      && (this.mayDealOverEmpties() || !s.columns.some((c) => c.length === 0));
+    const all = s.columns.map((_, i) => i);
+    if (!this.dealSkipsEmpties()) return all;
+    const kept = all.filter((i) => s.columns[i].length > 0);
+    return kept.length ? kept : all;   // never skip every column
+  }
+
+  canDeal() {
+    return this.state.phase === 'play' && this.state.stock.length > 0;
   }
 
   // ------------------------------------------------------------- charges
@@ -345,51 +359,29 @@ export class Game {
     }
   }
 
+  /**
+   * The run continues while there is something worth doing: a suggestion, a
+   * technique still charged, or a cell to park a card in -- and a cell only
+   * counts when parking would uncover a face-down card or empty a column,
+   * since shuffling one card in and out forever is not a way out.
+   */
   hasLegalMove() {
     const s = this.state;
-    if (this.canDeal()) return true;
     if (s.charges.voidStep > 0 || s.charges.transmute > 0 || s.charges.awaken > 0) return true;
-    // An open cell always affords a move: it either exposes a buried card or
-    // empties a column, and both change the position.
-    if (s.reserve.some((r) => r === null) && s.columns.some((c) => c.length >= 1)) return true;
-
-    for (let i = 0; i < s.reserve.length; i++) {
-      const card = s.reserve[i];
-      if (!card) continue;
-      for (let j = 0; j < s.columns.length; j++) {
-        if (this.canDrop([card], { zone: 'col', index: j })) return true;
-      }
-    }
-    for (let i = 0; i < s.columns.length; i++) {
-      const tail = this.columnTail(i);
-      for (let n = 1; n <= tail; n++) {
-        const run = s.columns[i].slice(s.columns[i].length - n);
-        for (let j = 0; j < s.columns.length; j++) {
-          if (i === j) continue;
-          if (s.columns[j].length === 0 && n === s.columns[i].length) continue;
-          if (this.canDrop(run, { zone: 'col', index: j })) return true;
-        }
-      }
-    }
-    return false;
+    if (s.reserve.some((r) => r === null)
+      && s.columns.some((c) => c.length === 1 || (c.length > 1 && !c[c.length - 2].faceUp))) return true;
+    return this.suggest().kind !== 'over';
   }
 
-  /** No stock and no tableau-to-tableau move: the player is very likely stuck. */
+  /** Nothing worth suggesting is left, though the position may still be poked at. */
   isStagnant() {
-    const s = this.state;
-    if (s.phase !== 'play' || this.canDeal()) return false;
-    for (let i = 0; i < s.columns.length; i++) {
-      const tail = this.columnTail(i);
-      for (let n = 1; n <= tail; n++) {
-        const run = s.columns[i].slice(s.columns[i].length - n);
-        for (let j = 0; j < s.columns.length; j++) {
-          if (i === j) continue;
-          if (s.columns[j].length === 0 && n === s.columns[i].length) continue;
-          if (this.canDrop(run, { zone: 'col', index: j })) return false;
-        }
-      }
-    }
-    return true;
+    return this.state.phase === 'play' && this.suggest().kind === 'over';
+  }
+
+  /** Why the stock will not deal, or null when it will. */
+  dealBlockedReason() {
+    if (this.canDeal()) return null;
+    return this.state.stock.length ? null : 'The stock is spent.';
   }
 
   concede() {
@@ -426,8 +418,10 @@ export class Game {
     const dest = this.state.columns[to.index];
     const src = from.zone === 'col' ? this.state.columns[from.index] : null;
     const under = src && src.length > run.length ? src[src.length - run.length - 1] : null;
+    const landed = dest.concat(run);
     return {
-      resultRun: movableTail(dest.concat(run), { mixedSuit: this.mixedSuitMoves() }),
+      resultRun: movableTail(landed, { mixedSuit: this.mixedSuitMoves() }),
+      seals: completedMeridian(landed) !== null,
       exposes: !!(under && !under.faceUp),
       empties: !!(src && src.length === run.length),
       destEmpty: dest.length === 0,
@@ -436,6 +430,7 @@ export class Game {
 
   /** True when `a` is the move a thoughtful player would rather make. */
   static better(a, b) {
+    if (a.seals !== b.seals) return a.seals;
     if (a.resultRun !== b.resultRun) return a.resultRun > b.resultRun;
     if (a.exposes !== b.exposes) return a.exposes;
     if (a.empties !== b.empties) return a.empties;
@@ -478,7 +473,7 @@ export class Game {
     const out = [];
     const emptySeen = new Set();
 
-    const consider = (from, key) => {
+    const consider = (from, key, wholeRun) => {
       const run = this.takeRun(from);
       if (!run || !run.length || run.some((c) => !c.faceUp)) return;
       for (let j = 0; j < s.columns.length; j++) {
@@ -488,7 +483,10 @@ export class Game {
         if (destEmpty && emptySeen.has(key)) continue;
         if (!this.canDrop(run, { zone: 'col', index: j })) continue;
         if (destEmpty) emptySeen.add(key);
-        out.push({ from, to: { zone: 'col', index: j }, ...this.moveScore(from, { zone: 'col', index: j }) });
+        out.push({
+          from, to: { zone: 'col', index: j }, wholeRun,
+          ...this.moveScore(from, { zone: 'col', index: j }),
+        });
       }
     };
 
@@ -498,7 +496,7 @@ export class Game {
       for (let n = 1; n <= tail; n++) {
         const from = { zone: 'col', index: i, count: n };
         const before = out.length;
-        consider(from, `c${i}`);
+        consider(from, `c${i}`, n === tail);
         for (const m of out.splice(before)) {
           const key = m.to.index;
           if (!perDest.has(key) || Game.better(m, perDest.get(key))) perDest.set(key, m);
@@ -507,11 +505,33 @@ export class Game {
       out.push(...perDest.values());
     }
     for (let i = 0; i < s.reserve.length; i++) {
-      if (s.reserve[i]) consider({ zone: 'reserve', index: i }, `r${i}`);
+      if (s.reserve[i]) consider({ zone: 'reserve', index: i }, `r${i}`, true);
     }
 
     out.sort((a, b) => (Game.better(a, b) ? -1 : Game.better(b, a) ? 1 : 0));
     return limit ? out.slice(0, limit) : out;
+  }
+
+  /**
+   * What to suggest, in the order a player actually wants to hear it:
+   *
+   *   1. moves that seal a meridian -- worth splitting a run for
+   *   2. moves that carry a whole run somewhere, never breaking one up
+   *   3. failing both, moves into an empty column
+   *   4. failing that, deal another row
+   *   5. failing that, the run is over
+   *
+   * @returns {{kind:'moves'|'empty'|'deal'|'over', moves: Array}}
+   */
+  suggest() {
+    if (this.state.phase !== 'play') return { kind: 'over', moves: [] };
+    const all = this.listMoves();
+    const useful = all.filter((m) => m.seals || (m.wholeRun && !m.destEmpty));
+    if (useful.length) return { kind: 'moves', moves: useful };
+    const intoEmpty = all.filter((m) => m.destEmpty);
+    if (intoEmpty.length) return { kind: 'empty', moves: intoEmpty };
+    if (this.canDeal()) return { kind: 'deal', moves: [] };
+    return { kind: 'over', moves: [] };
   }
 
   score() {

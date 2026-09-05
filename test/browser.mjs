@@ -82,6 +82,24 @@ const findMove = (page) => page.evaluate(() => {
 
 const moves = (page) => page.evaluate(() => window.NineMeridians.game.state.moves);
 
+/** Escape stops any running hint, so a check starts from a known state. */
+async function hintOff(page) {
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120);
+}
+
+// Checks that rig the board by hand leave it holding the wrong cards, which
+// later trips the save's conservation check. Stash the real state around them.
+const stash = (page) => page.evaluate(() => {
+  window.__stash = structuredClone(window.NineMeridians.game.state);
+});
+const unstash = (page) => page.evaluate(() => {
+  const g = window.NineMeridians.game;
+  g.state = window.__stash;
+  g.undoStack = [];
+  window.NineMeridians.render();
+});
+
 const browser = await chromium.launch();
 
 // --- one pass per form factor ------------------------------------------
@@ -242,8 +260,13 @@ for (const view of VIEWS) {
   });
 
   await check('the hint carousel cycles and reports its position', async () => {
-    const total = await page.evaluate(() => window.NineMeridians.game.listMoves().length);
-    if (total < 2) throw new Error('need at least two moves to cycle');
+    const plan = await page.evaluate(() => {
+      const s = window.NineMeridians.game.suggest();
+      return { kind: s.kind, total: s.moves.length };
+    });
+    if (plan.kind !== 'moves') throw new Error('expected move suggestions, got ' + plan.kind);
+    if (plan.total < 2) throw new Error('need at least two suggestions to cycle');
+    const total = plan.total;
     await page.click('#btn-hint');
     await page.waitForTimeout(150);
     const first = await page.evaluate(() => ({
@@ -273,6 +296,55 @@ for (const view of VIEWS) {
     await page.waitForTimeout(800);
     const second = await page.evaluate(() => document.querySelector('#status').textContent);
     if (second !== `Showing hint 2/${total}`) throw new Error('did not advance, read "' + second + '"');
+    await hintOff(page);
+  });
+
+  await check('an empty column does not stop the stock', async () => {
+    await hintOff(page);
+    await stash(page);
+    const r = await page.evaluate(() => {
+      const g = window.NineMeridians.game;
+      g.state.columns[2] = [];          // as if a meridian had just sealed
+      window.NineMeridians.render();
+      const before = g.state.stock.length;
+      const dealt = g.deal();
+      window.NineMeridians.render();
+      return { dealt, before, after: g.state.stock.length,
+        filled: g.state.columns[2].length, status: document.querySelector('#status').textContent };
+    });
+    if (!r.dealt) throw new Error('the stock refused to deal with an empty column');
+    if (r.after >= r.before) throw new Error('no cards left the stock');
+    if (r.filled !== 1) throw new Error('the empty column was not dealt into');
+    if (/empty column/i.test(r.status)) throw new Error('still warning about empty columns: "' + r.status + '"');
+    await unstash(page);
+  });
+
+  await check('with the board full and no moves, the hint says deal', async () => {
+    await hintOff(page);
+    await stash(page);
+    await page.evaluate(() => {
+      const g = window.NineMeridians.game;
+      // Every column two face-up cards that cannot stack, and stock in hand.
+      g.state.columns = g.state.columns.map((_, i) => [
+        { id: 7000 + i * 2, rank: 2, suit: 'spade', faceUp: true, wild: false },
+        { id: 7001 + i * 2, rank: 9, suit: 'heart', faceUp: true, wild: false },
+      ]);
+      g.state.stock = [{ id: 7900, rank: 5, suit: 'club', faceUp: false, wild: false }];
+      g.state.reserve = [];
+      window.NineMeridians.render();
+    });
+    await page.click('#btn-hint');
+    await page.waitForTimeout(200);
+    const r = await page.evaluate(() => ({
+      kind: window.NineMeridians.game.suggest().kind,
+      status: document.querySelector('#status').textContent,
+      pulsing: document.querySelector('#stock').classList.contains('hint-deal'),
+    }));
+    if (r.kind !== 'deal') throw new Error('expected deal advice, got ' + r.kind);
+    if (!/deal another row/i.test(r.status)) throw new Error('status read "' + r.status + '"');
+    if (!r.pulsing) throw new Error('the stock was not highlighted');
+    await hintOff(page);
+    await unstash(page);
   });
 
   await check('any action cancels the hint', async () => {
@@ -294,13 +366,20 @@ for (const view of VIEWS) {
   });
 
   await check('undo sits in the dock and steps back', async () => {
-    const dock = await page.evaluate(() => {
-      const b = document.querySelector('#btn-undo');
-      return { inDock: document.querySelector('#dock').contains(b), disabled: b.disabled };
-    });
-    if (!dock.inDock) throw new Error('undo is not in the bottom dock');
-    if (dock.disabled) throw new Error('undo should be live after moves were made');
+    await hintOff(page);
+    if (!(await page.evaluate(() => document.querySelector('#dock').contains(document.querySelector('#btn-undo'))))) {
+      throw new Error('undo is not in the bottom dock');
+    }
+    // Make a move of our own, so the check does not lean on earlier ones.
+    const p = await findMove(page);
+    if (!p) throw new Error('no legal move to undo');
+    const c = await page.locator(`.card[data-col="${p.i}"][data-idx="${p.idx}"]`).boundingBox();
+    await page.mouse.click(c.x + c.width / 2, c.y + 8);
+    await page.waitForTimeout(250);
     const before = await moves(page);
+    if (await page.evaluate(() => document.querySelector('#btn-undo').disabled)) {
+      throw new Error('undo is dead straight after a move');
+    }
     await page.click('#btn-undo');
     await page.waitForTimeout(220);
     if (await moves(page) >= before) throw new Error('undo did not step back');

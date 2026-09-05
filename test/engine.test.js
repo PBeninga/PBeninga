@@ -158,19 +158,40 @@ test('Wide Channels leaves one column empty at the deal', () => {
   assert.equal(g.state.columns.filter((c) => c.length === 0).length, 1);
 });
 
-test('the stock deals one card per column, and not over an empty column', () => {
+test('the stock deals one card per column, empty ones included', () => {
   const g = new Game({ seed: 'STOCK' });
   const before = g.state.stock.length;
   assert.equal(g.deal(), true);
   assert.equal(g.state.stock.length, before - g.state.columns.length);
   assert.ok(g.state.columns.every((c) => c[c.length - 1].faceUp));
 
+  // Sealing a meridian empties a column; that must not strand the stock.
   g.state.columns[3] = [];
-  assert.equal(g.canDeal(), false);
-  assert.equal(g.deal(), false);
-
-  g.state.boons = { expansion: 3 };
   assert.equal(g.canDeal(), true);
+  assert.equal(g.deal(), true);
+  assert.equal(g.state.columns[3].length, 1, 'the empty column was dealt into');
+});
+
+test('Boundless Field keeps empty columns empty through a deal', () => {
+  const g = new Game({ seed: 'FIELD' });
+  g.state.boons = { expansion: 3 };
+  g.state.columns[2] = [];
+  g.state.columns[6] = [];
+  const before = g.state.stock.length;
+  assert.deepEqual(g.dealTargets().includes(2), false);
+  assert.equal(g.deal(), true);
+  assert.equal(g.state.columns[2].length, 0);
+  assert.equal(g.state.columns[6].length, 0);
+  assert.equal(g.state.stock.length, before - (g.state.columns.length - 2));
+});
+
+test('a board of nothing but empty columns is still dealt into', () => {
+  const g = new Game({ seed: 'ALLEMPTY' });
+  g.state.boons = { expansion: 3 };
+  g.state.columns = g.state.columns.map(() => []);
+  assert.equal(g.dealTargets().length, g.state.columns.length);
+  assert.equal(g.deal(), true);
+  assert.ok(g.state.columns.every((c) => c.length === 1));
 });
 
 test('reserve cells hold exactly one card and give it back', () => {
@@ -303,7 +324,7 @@ test('tapping sends a card where it builds the longest run', () => {
   assert.equal(g.autoTarget(2, 1), 0);
   assert.deepEqual(
     { ...g.moveScore({ zone: 'col', index: 2, count: 1 }, { zone: 'col', index: 0 }) },
-    { resultRun: 4, exposes: false, empties: true, destEmpty: false },
+    { resultRun: 4, seals: false, exposes: false, empties: true, destEmpty: false },
   );
 });
 
@@ -440,4 +461,89 @@ test('junk in the save slot is ignored', () => {
   const bad = JSON.parse(serialize(g));
   bad.difficulty = 'nonsense';
   assert.equal(deserialize(JSON.stringify(bad)), null);
+});
+
+test('the hint only suggests whole-run moves and meridian seals', () => {
+  const g = rigged([
+    // A movable run of two: only the pair moving together should be offered.
+    [makeCard(2, 'heart', false), up(9, 'club'), up(8, 'club')],
+    [up(10, 'club')],
+    [up(9, 'heart')],
+  ]);
+  const s = g.suggest();
+  assert.equal(s.kind, 'moves');
+  for (const m of s.moves) assert.ok(m.wholeRun || m.seals, 'a run was broken up: ' + JSON.stringify(m));
+  // 8♣ alone onto 9♥ is legal, splits the run, and seals nothing -- not offered.
+  assert.ok(!s.moves.some((m) => m.from.count === 1 && m.to.index === 2));
+  assert.ok(s.moves.some((m) => m.from.count === 2 && m.to.index === 1));
+});
+
+test('a meridian seal is offered even though it splits a run', () => {
+  const col = [];
+  for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
+  // A♣ sits at the foot of a 3♣-2♣-A♣ run, so lifting it alone splits that run.
+  const g = rigged([col, [up(3, 'club'), up(2, 'club'), up(1, 'club')], [up(9, 'heart')]]);
+  const s = g.suggest();
+  assert.equal(s.kind, 'moves');
+  const seal = s.moves.find((m) => m.seals);
+  assert.ok(seal, 'the sealing move must be offered');
+  assert.equal(seal.wholeRun, false, 'even though it is not a whole run');
+  assert.equal(s.moves[0], seal, 'and it must come first');
+});
+
+test('with nothing better, the hint points at an empty column', () => {
+  const g = rigged([[up(4, 'spade'), up(7, 'club')], [up(2, 'heart')], []]);
+  const s = g.suggest();
+  assert.equal(s.kind, 'empty');
+  assert.ok(s.moves.length);
+  assert.ok(s.moves.every((m) => m.destEmpty));
+});
+
+test('with no empty column either, the hint says deal', () => {
+  const g = rigged([[up(4, 'spade'), up(7, 'club')], [up(2, 'heart')]]);
+  g.state.stock = [makeCard(5, 'club'), makeCard(6, 'club')];
+  assert.equal(g.suggest().kind, 'deal');
+  assert.equal(g.state.phase, 'play');
+});
+
+test('no moves, no empty column and no stock ends the run', () => {
+  const g = rigged([[up(4, 'spade'), up(7, 'club')], [up(2, 'heart')]]);
+  assert.equal(g.suggest().kind, 'over');
+  assert.equal(g.hasLegalMove(), false);
+  g.settle();
+  assert.equal(g.state.phase, 'failed');
+});
+
+test('a charged technique or a useful cell keeps the run alive', () => {
+  const dead = () => rigged([[up(4, 'spade'), up(7, 'club')], [up(2, 'heart')]]);
+
+  const withCharge = dead();
+  withCharge.state.charges.voidStep = 1;
+  assert.equal(withCharge.hasLegalMove(), true);
+
+  // A cell that would uncover a face-down card is a way out...
+  const withCell = rigged([[makeCard(4, 'spade', false), up(7, 'club')], [up(2, 'heart')]], { reserve: [null] });
+  assert.equal(withCell.hasLegalMove(), true);
+
+  // ...but one that only shuffles a fully exposed card around is not. Every
+  // column here is two face-up cards, so parking uncovers nothing and empties
+  // nothing.
+  const idleCell = rigged(
+    [[up(4, 'spade'), up(7, 'club')], [up(2, 'heart'), up(9, 'diamond')]],
+    { reserve: [null] },
+  );
+  assert.equal(idleCell.suggest().kind, 'over');
+  assert.equal(idleCell.hasLegalMove(), false);
+});
+
+test('an empty column never stops the stock', () => {
+  const g = new Game({ seed: 'BLOCK', difficulty: 'adept' });
+  assert.equal(g.dealBlockedReason(), null);
+  g.state.columns[3] = [];
+  g.state.columns[5] = [];
+  assert.equal(g.canDeal(), true);
+  assert.equal(g.dealBlockedReason(), null);
+  g.state.stock = [];
+  assert.equal(g.canDeal(), false);
+  assert.match(g.dealBlockedReason(), /spent/);
 });

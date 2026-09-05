@@ -241,6 +241,15 @@ body.compact-cards .card.down::after { font-size: calc(var(--card-w) * .3); top:
 #dock .warn { color: var(--gold); }
 #dock .hint-count { color: var(--gold); letter-spacing: .08em; }
 
+/* The hint has no cards to fly when the advice is "deal": pulse the pile. */
+.stock.hint-deal {
+  border-color: var(--gold); color: var(--gold); opacity: 1;
+  animation: pulse-deal 1s ease-in-out infinite;
+}
+@keyframes pulse-deal {
+  50% { box-shadow: 0 0 0 4px rgba(227,184,105,.28), 0 0 20px rgba(227,184,105,.45); }
+}
+
 #btn-hint.armed { border-color: var(--gold); color: var(--gold); background: rgba(227,184,105,.14); }
 
 /* ------------------------------------------------------------------ hints */

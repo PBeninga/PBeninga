@@ -43,7 +43,7 @@ export const PATHS = [
     tiers: [
       { name: 'Open Meridian', desc: '+1 tableau column.' },
       { name: 'Wide Channels', desc: '+1 column, and every realm begins with one column left empty.' },
-      { name: 'Boundless Field', desc: '+1 column, and you may draw from the stock even with empty columns.' },
+      { name: 'Boundless Field', desc: '+1 column, and the heavens\u2019 deal skips your empty columns, leaving them open.' },
     ],
   },
 ];

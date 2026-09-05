@@ -154,10 +154,9 @@ function renderHud() {
   const stock = $('#stock');
   stock.textContent = s.stock.length;
   stock.classList.toggle('spent', s.stock.length === 0);
-  stock.classList.toggle('blocked', s.stock.length > 0 && !game.canDeal());
-  stock.title = s.stock.length === 0 ? 'The stock is spent.'
-    : game.canDeal() ? 'Deal one card to every column.'
-    : 'Fill every empty column before the heavens will deal again.';
+  stock.classList.toggle('blocked', false);
+  stock.title = game.dealBlockedReason() || 'Deal one card to every column.';
+  stock.classList.toggle('hint-deal', !!hint && hint.kind === 'deal');
 
   const cells = $('#cells');
   cells.innerHTML = '';
@@ -232,8 +231,7 @@ function renderDock() {
   const status = $('#status');
   status.innerHTML = '';
   if (hint) {
-    status.appendChild(el('span', 'hint-count',
-      hint.moves.length ? `Showing hint ${hint.index + 1}/${hint.moves.length}` : 'No moves remain'));
+    status.appendChild(el('span', 'hint-count', hintStatusText()));
   } else if (game.isStagnant()) {
     status.appendChild(el('span', 'warn', '⚠ No moves left — undo, spend a technique, or abandon the climb.'));
   } else {
@@ -366,13 +364,24 @@ function nudge(node) {
  * copy of the cards drifting to where they would land. Any real action stops
  * it -- see cancelHint, wired to the whole document.
  */
+function hintStatusText() {
+  if (!hint) return '';
+  if (hint.kind === 'deal') return 'No moves left — deal another row';
+  if (hint.kind === 'over') return 'No moves and nothing to deal — the run is over';
+  const what = hint.kind === 'empty' ? 'Only empty-column moves' : 'Showing hint';
+  return `${what} ${hint.index + 1}/${hint.moves.length}`;
+}
+
 function startHint() {
   stopHint();
   if (!game || game.state.phase !== 'play') return;
-  hint = { moves: game.listMoves(), index: 0, timers: [], layer: null };
+  const s = game.suggest();
+  hint = { kind: s.kind, moves: s.moves, index: 0, timers: [], layer: null };
+  renderHud();
   renderDock();
   if (!hint.moves.length) {
-    hint.timers.push(setTimeout(stopHint, 1600));
+    // Nothing to draw a ghost for: the advice is the stock pile, or nothing.
+    hint.timers.push(setTimeout(() => { stopHint(); render(); }, 2600));
     return;
   }
   showHintStep();
@@ -385,6 +394,8 @@ function stopHint() {
   hint = null;
   document.querySelectorAll('.hint-src').forEach((n) => n.classList.remove('hint-src'));
   document.querySelectorAll('.hint-dest').forEach((n) => n.classList.remove('hint-dest'));
+  const stock = $('#stock');
+  if (stock) stock.classList.remove('hint-deal');
   if (game) renderDock();
 }
 
@@ -638,12 +649,12 @@ function rulesHtml() {
         <li>Lift a group only when it is a <b>descending run of one suit</b>.</li>
         <li><b>Tap or click a card</b> and it flies to whichever column builds the
         longest sequence. Drag it instead when you want a different column.</li>
-        <li>An empty column accepts anything. The stock deals one card to every column — but only when no column stands empty.</li>
+        <li>An empty column accepts anything, and the stock deals one card to every column, empty ones included.</li>
       </ul>
       <h3>Cultivation</h3>
       <ul>
         <li>A complete <b>K→A run of one suit</b> is a <b>meridian</b>. It seals itself and leaves the column.</li>
-        <li>A realm is a <b>whole game</b>: clear every sequence in the deck, not just the first. Only then do you
+        <li>A realm is a <b>whole game</b>: it ends when every card has been sealed away. Only then do you
         <b>break through</b>, choose a boon, and face a fresh tableau.</li>
         <li>Every realm deals <b>one more sequence than the last</b>, and all of them must go. The paths you
         walk are what close that gap.</li>
