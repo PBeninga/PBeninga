@@ -28,6 +28,7 @@ let game = null;
 let drag = null;
 let hint = null;             // {moves, index, timers, layer}
 let offsets = { up: 0, down: 0 };
+let shownPhase = 'play';   // so a burst fires on the change, not on every check
 
 // How far above the fingertip a dragged stack floats, so it stays visible.
 const TOUCH_LIFT = 38;
@@ -147,6 +148,64 @@ function renderTop() {
  * The core grows with everything the run has sealed: a speck at the first
  * deal, most of the board by ascension.
  */
+// What the core burns like at each rank, and after. An ember through to
+// something with no colour left to take.
+const CORE_COLOURS = [
+  { a: '255,168,84', b: '226,86,44' },     // I   Ember
+  { a: '206,220,238', b: '110,140,182' },  // II  Iron
+  { a: '232,242,255', b: '146,186,234' },  // III Silver
+  { a: '255,224,150', b: '198,150,60' },   // IV  Gold
+  { a: '255,255,255', b: '186,166,255' },  // V   Radiant
+  { a: '238,214,255', b: '146,104,232' },  // VI  Sovereign
+];
+const TRANSCENDENT = { a: '255,255,255', b: '255,240,200' };
+const BURST_MS = 1100;
+const BURST_SWAP_MS = 430;
+
+function coreColour(rank) {
+  return CORE_COLOURS[Math.min(Math.max(rank, 1), CORE_COLOURS.length) - 1];
+}
+
+function paintCore(colour) {
+  const core = $('#core');
+  core.style.setProperty('--core-a', colour.a);
+  core.style.setProperty('--core-b', colour.b);
+}
+
+/**
+ * A rank ends: the core detonates, throws a ring across the board, collapses,
+ * and comes back burning the next rank's colour.
+ */
+function coreBurst(nextColour) {
+  const core = $('#core');
+  if (!core) return;
+  const size = Math.max(core.getBoundingClientRect().width, 30);
+  const reach = Math.max(window.innerWidth, window.innerHeight) * 1.25;
+
+  const ring = el('div', 'core-burst');
+  const from = coreColour(game.state.rank);
+  ring.style.setProperty('--burst', from.a);
+  $('#app').appendChild(ring);
+  ring.animate([
+    { transform: `scale(${size / 100})`, opacity: .95, borderWidth: '3px' },
+    { transform: `scale(${reach / 100})`, opacity: 0, borderWidth: '1px' },
+  ], { duration: 950, easing: 'cubic-bezier(.16,.72,.3,1)', fill: 'forwards' });
+  setTimeout(() => ring.remove(), 1050);
+
+  core.classList.add('bursting');
+  core.animate([
+    { transform: 'scale(1)', filter: 'brightness(1)' },
+    { transform: 'scale(1.9)', filter: 'brightness(3.6)', offset: .16 },
+    { transform: 'scale(.3)', filter: 'brightness(.55)', offset: .46 },
+    { transform: 'scale(1.12)', filter: 'brightness(1.5)', offset: .74 },
+    { transform: 'scale(1)', filter: 'brightness(1)' },
+  ], { duration: BURST_MS, easing: 'ease-out' });
+
+  // Swap the colour while it is collapsed, so it comes back changed.
+  setTimeout(() => paintCore(nextColour), BURST_SWAP_MS);
+  setTimeout(() => core.classList.remove('bursting'), BURST_MS + 40);
+}
+
 function renderCore() {
   const core = $('#core');
   if (!core) return;
@@ -155,6 +214,10 @@ function renderCore() {
   const size = 6 + Math.pow(p, 0.7) * boardH * 0.78;
   core.style.setProperty('--core-size', `${Math.round(size)}px`);
   core.style.setProperty('--core-glow', (0.34 + 0.5 * p).toFixed(2));
+  // Not while a burst owns the colour -- it swaps mid-collapse on purpose.
+  if (!core.classList.contains('bursting')) {
+    paintCore(game.state.phase === 'ascended' ? TRANSCENDENT : coreColour(game.state.rank));
+  }
 }
 
 function renderStock() {
@@ -929,11 +992,30 @@ function endScreen(won) {
   overlay(p);
 }
 
+/**
+ * Panels wait for the burst. Seeing the core change is the reward for clearing
+ * a rank; covering it with an overlay would throw that away.
+ */
 function checkPhase() {
   const phase = game.state.phase;
-  if (phase === 'breakthrough') breakthroughScreen();
-  else if (phase === 'ascended') endScreen(true);
-  else if (phase === 'failed') endScreen(false);
+  const fresh = phase !== shownPhase;
+  shownPhase = phase;
+
+  if (phase === 'breakthrough') {
+    if (!fresh) return breakthroughScreen();
+    coreBurst(coreColour(game.state.rank + 1));
+    setTimeout(() => {
+      if (game && game.state.phase === 'breakthrough') breakthroughScreen();
+    }, BURST_MS - 150);
+  } else if (phase === 'ascended') {
+    if (!fresh) return endScreen(true);
+    coreBurst(TRANSCENDENT);
+    setTimeout(() => {
+      if (game && game.state.phase === 'ascended') endScreen(true);
+    }, BURST_MS - 150);
+  } else if (phase === 'failed') {
+    endScreen(false);
+  }
 }
 
 // ------------------------------------------------------------------ setup
@@ -961,6 +1043,7 @@ function save() {
 
 function start(seed, difficulty) {
   stopHint();
+  shownPhase = 'play';
   game = new Game({ seed, difficulty });
   closeOverlay();
   render();

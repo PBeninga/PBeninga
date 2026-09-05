@@ -572,6 +572,48 @@ for (const view of VIEWS) {
     await unstash(page);
   });
 
+  await check('clearing a rank detonates the core into a new colour', async () => {
+    await hintOff(page);
+    await stash(page);
+    const before = await page.evaluate(() => document.querySelector('#core').style.getPropertyValue('--core-a'));
+    await page.evaluate(() => {
+      const N = window.Ascendant, g = N.game;
+      g.state.required = g.state.runes + 1;
+      const col = [];
+      for (let r = 13; r >= 1; r--) col.push({ id: 9300 + r, rank: r, suit: 'club', faceUp: true, wild: false });
+      g.state.columns[0] = col;
+      g.settle();
+      N.render();
+      N.checkPhase();
+    });
+
+    await page.waitForTimeout(200);
+    const mid = await page.evaluate(() => ({
+      rings: document.querySelectorAll('.core-burst').length,
+      bursting: document.querySelector('#core').classList.contains('bursting'),
+      overlayUp: !document.querySelector('#overlay').hidden,
+    }));
+    if (!mid.rings) throw new Error('no shockwave');
+    if (!mid.bursting) throw new Error('the core did not detonate');
+    if (mid.overlayUp) throw new Error('the panel covered the burst');
+
+    await page.waitForTimeout(1300);
+    const after = await page.evaluate(() => ({
+      rings: document.querySelectorAll('.core-burst').length,
+      bursting: document.querySelector('#core').classList.contains('bursting'),
+      overlayUp: !document.querySelector('#overlay').hidden,
+      colour: document.querySelector('#core').style.getPropertyValue('--core-a'),
+    }));
+    if (after.rings) throw new Error('the shockwave was left behind');
+    if (after.bursting) throw new Error('the burst never finished');
+    if (!after.overlayUp) throw new Error('the advancement panel never arrived');
+    if (after.colour === before) throw new Error(`the core kept its colour (${before})`);
+
+    await page.locator('.boon').first().click();
+    await page.waitForTimeout(300);
+    await unstash(page);
+  });
+
   await check('the breakthrough offer fits without scrolling', async () => {
     await page.evaluate(() => {
       const N = window.Ascendant, g = N.game;
@@ -583,7 +625,8 @@ for (const view of VIEWS) {
       g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
       N.render(); N.checkPhase();
     });
-    await page.waitForTimeout(350);
+    // The panel waits out the core burst before it appears.
+    await page.waitForTimeout(1300);
     await shot(page, `${view.tag}-breakthrough`);
     const r = await page.evaluate(() => {
       const o = document.querySelector('#overlay');

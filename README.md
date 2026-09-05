@@ -75,9 +75,12 @@ bottom. The status line floats just above the toolbar and costs no board
 height when it has nothing to say.
 
 Behind the tableau sits **the core**: a speck of light at the first deal that
-grows with everything the run has sealed, until by the last rank it is a glow
-across most of the board. Binding a rune sends its thirteen cards down into it — bleaching white on the way, coming apart into dust, and absorbed. The
-advancement screen waits for them to arrive rather than cutting over the top.
+grows with everything the run has bound, until by the last rank it is a glow
+across most of the board. It burns the colour of the rank you are on — ember,
+iron, silver, gold, radiant, sovereign — and when a rank ends it **detonates**,
+throwing a shockwave across the board and coming back in the next rank's
+colour. The advancement panel waits for that, because covering it would throw
+away the one moment the run visibly changes. Binding a rune sends its thirteen cards down into it — bleaching white on the way, coming apart into dust, and absorbed.
 
 **Tap a card and it goes** — it slides to its new column over half a second
 rather than teleporting. **Dealing** throws the new row out of the stock one

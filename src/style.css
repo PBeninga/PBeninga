@@ -152,18 +152,31 @@ body {
   background:
     radial-gradient(circle at 50% 50%,
       rgba(255,255,255,.96) 0%,
-      rgba(255,238,196,.8) 13%,
-      rgba(232,189,106,.44) 32%,
-      rgba(150,140,220,.18) 58%,
+      rgba(var(--core-a, 255,224,150), .8) 13%,
+      rgba(var(--core-a, 255,224,150), .44) 32%,
+      rgba(var(--core-b, 150,140,220), .18) 58%,
       transparent 78%);
+  transition: width .7s ease, height .7s ease, margin .7s ease, opacity .7s ease,
+              background .5s ease;
   filter: blur(calc(var(--core-size, 6px) * .045));
-  transition: width .7s ease, height .7s ease, margin .7s ease, opacity .7s ease;
   animation: core-breathe 6.5s ease-in-out infinite;
 }
 @keyframes core-breathe {
   50% { transform: scale(1.06); }
 }
 #core.flare { animation: core-flare .7s ease-out; }
+/* The burst drives transform itself, so the idle breathing has to stand down. */
+#core.bursting { animation: none; }
+
+/* The shockwave thrown off when a rank ends. */
+.core-burst {
+  position: absolute; left: 50%; top: 58%; z-index: 0;
+  width: 100px; height: 100px; margin: -50px 0 0 -50px;
+  border-radius: 50%; pointer-events: none;
+  border: 2px solid rgba(var(--burst, 255,224,150), .9);
+  box-shadow: 0 0 26px rgba(var(--burst, 255,224,150), .55),
+              inset 0 0 26px rgba(var(--burst, 255,224,150), .35);
+}
 @keyframes core-flare {
   0% { transform: scale(1); filter: blur(calc(var(--core-size, 6px) * .045)) brightness(1); }
   22% { transform: scale(1.28); filter: blur(calc(var(--core-size, 6px) * .02)) brightness(2.1); }
