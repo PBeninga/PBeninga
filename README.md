@@ -164,14 +164,26 @@ rule set is testable headlessly — which is what `test/` does.
 
 ## Balance
 
-Every previous measurement described a four-suit game with a 52-card opening
-board, so none of it survives this build: single suit and two decks are the two
-largest changes the game has had. Numbers are being re-measured; until they
-land, treat the difficulty tables as untested.
+Measured with the same greedy bot as before (no lookahead, random boon choices,
+never parks a card in a slot), 60 runs per difficulty:
 
-What can be said without a bot: single-suit Spider is a game strong players win
-most of the time, and Ember is exactly that board. Sovereign is two and a half
-times its size.
+| | clears Ember | avg rank reached | transcended |
+|---|---|---|---|
+| Novice | 8% | 1.1 | 0/60 |
+| Adept | 7% | 1.1 | 0/60 |
+| Merciless | 2% | 1.0 | 0/60 |
+
+**Do not read that as the game getting harder.** Single-suit is the forgiving
+Spider variant — strong players win that board most of the time, and Ember is
+exactly it. What collapsed is the bot: clearing *every* sequence off a 104-card
+board needs planning several moves out, and it has none. It used to clear a
+52-card board 43% of the time and now clears one twice the size 7% of the time,
+which is about what a greedy heuristic should do.
+
+So these numbers no longer measure the game. Getting a figure worth trusting
+needs either a solver with real lookahead or a person playing it, and the
+second is cheaper. The knobs meanwhile are `DIFFICULTIES.startSets` and
+`rankConfig()` in `src/engine.js`.
 
 Two things follow, and both are yours to call:
 
