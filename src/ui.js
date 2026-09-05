@@ -21,12 +21,11 @@ const el = (tag, cls, html) => {
 };
 
 let game = null;
-let selection = null;        // {zone:'col'|'reserve', index, count}
 let armed = null;            // 'void' | 'transmute' | 'awaken'
 let pendingTransmute = null;
 let drag = null;
-let lastTap = null;
-let lastSeen = { meridians: 0 };
+let hint = null;             // {moves, index, timers, layer}
+let offsets = { up: 0, down: 0 };
 
 // How far above the fingertip a dragged stack floats, so it stays visible.
 const TOUCH_LIFT = 38;
@@ -109,7 +108,7 @@ function render() {
   if (!game) return;
   renderHud();
   renderBoard();
-  renderTicker();
+  renderDock();
   save();
 }
 
@@ -160,19 +159,12 @@ function renderHud() {
     const c = el('div', 'cell' + (card ? ' filled' : ''));
     c.dataset.cell = i;
     if (card) c.appendChild(el('span', 'mini', miniLabel(card)));
-    if (selection && selection.zone === 'reserve' && selection.index === i) {
-      c.style.boxShadow = '0 0 0 2px var(--jade)';
-    }
     cells.appendChild(c);
   });
 
   chargeButton('#btn-void', 'void', s.charges.voidStep, 'Void Step');
   chargeButton('#btn-transmute', 'transmute', s.charges.transmute, 'Transmute');
   chargeButton('#btn-awaken', 'awaken', s.charges.awaken, 'Awaken');
-
-  const undo = $('#btn-undo');
-  undo.disabled = s.undosLeft <= 0 || !game.undoStack.length;
-  undo.innerHTML = `Undo <span class="count">${s.undosLeft}</span>`;
 }
 
 function chargeButton(sel, mode, count, label) {
@@ -188,6 +180,7 @@ function renderBoard() {
   const { h, boardH, compact } = measure();
   const cols = game.state.columns;
   const off = offsetsFor(cols, h, boardH, compact);
+  offsets = off;
 
   board.innerHTML = '';
   cols.forEach((col, ci) => {
@@ -199,35 +192,46 @@ function renderBoard() {
       n.style.top = Math.round(top) + 'px';
       n.dataset.col = ci;
       n.dataset.idx = i;
-      if (isSelected(ci, i)) n.classList.add('picked');
+      if (isHintSource(ci, i)) n.classList.add('hint-src');
       if (drag && drag.active && drag.zone === 'col' && drag.index === ci && i >= col.length - drag.count) {
         n.classList.add('ghost');
       }
       colEl.appendChild(n);
       if (i < col.length - 1) top += card.faceUp ? off.up : off.down;
     });
+    if (hint && hint.moves[hint.index] && hint.moves[hint.index].to.index === ci) {
+      colEl.classList.add('hint-dest');
+    }
     board.appendChild(colEl);
   });
 }
 
-function isSelected(colIndex, cardIndex) {
-  if (!selection || selection.zone !== 'col' || selection.index !== colIndex) return false;
-  const col = game.state.columns[colIndex];
-  return cardIndex >= col.length - selection.count;
+function isHintSource(colIndex, cardIndex) {
+  const move = hint && hint.moves[hint.index];
+  if (!move || move.from.zone !== 'col' || move.from.index !== colIndex) return false;
+  return cardIndex >= game.state.columns[colIndex].length - move.from.count;
 }
 
-function renderTicker() {
+function renderDock() {
   const s = game.state;
-  const t = $('#ticker');
-  t.innerHTML = '';
-  t.appendChild(el('span', '', s.log[0] || ''));
-  if (game.isStagnant()) {
-    t.appendChild(el('span', 'warn', '⚠ No moves remain in the tableau — undo, spend a technique, or abandon the climb.'));
+  const status = $('#status');
+  status.innerHTML = '';
+  if (hint) {
+    status.appendChild(el('span', 'hint-count',
+      hint.moves.length ? `Showing hint ${hint.index + 1}/${hint.moves.length}` : 'No moves remain'));
+  } else if (game.isStagnant()) {
+    status.appendChild(el('span', 'warn', '⚠ No moves left — undo, spend a technique, or abandon the climb.'));
+  } else {
+    status.appendChild(el('span', '', s.log[0] || ''));
   }
-  const tag = el('span', '', `${game.seed} · ${DIFFICULTIES[game.difficulty].name}`);
-  tag.id = 'seed-tag';
-  tag.style.cssText = 'margin-left:auto;opacity:.6';
-  t.appendChild(tag);
+  $('#seed-tag').textContent = `${game.seed} · ${DIFFICULTIES[game.difficulty].name}`;
+
+  const undo = $('#btn-undo');
+  undo.disabled = s.undosLeft <= 0 || !game.undoStack.length;
+  undo.innerHTML = `↺ Undo <span class="count">${s.undosLeft}</span>`;
+  const hintBtn = $('#btn-hint');
+  hintBtn.disabled = s.phase !== 'play';
+  hintBtn.classList.toggle('armed', !!hint);
 }
 
 // ------------------------------------------------------------- highlights
@@ -238,7 +242,6 @@ function markTargets(run, on) {
     if (!on) return;
     const i = Number(colEl.dataset.col);
     if (drag && drag.zone === 'col' && drag.index === i) return;
-    if (selection && selection.zone === 'col' && selection.index === i) return;
     if (armed === 'void' && game.canDrop(run, { zone: 'col', index: i }, { force: true })) {
       colEl.classList.add('drop-forced');
     } else if (game.canDrop(run, { zone: 'col', index: i })) {
@@ -262,7 +265,7 @@ function attempt(from, to) {
 }
 
 function afterAction() {
-  selection = null;
+  stopHint();
   markTargets(null, false);
   render();
   checkPhase();
@@ -286,6 +289,113 @@ function toast(text) {
   setTimeout(() => t.remove(), 1300);
 }
 
+function nudge(node) {
+  node.animate(
+    [{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' },
+      { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }],
+    { duration: 200 },
+  );
+}
+
+// ------------------------------------------------------------------ hints
+
+/**
+ * Walk every move the position offers, one a second, drawing a translucent
+ * copy of the cards drifting to where they would land. Any real action stops
+ * it -- see cancelHint, wired to the whole document.
+ */
+function startHint() {
+  stopHint();
+  if (!game || game.state.phase !== 'play') return;
+  hint = { moves: game.listMoves(), index: 0, timers: [], layer: null };
+  renderDock();
+  if (!hint.moves.length) {
+    hint.timers.push(setTimeout(stopHint, 1600));
+    return;
+  }
+  showHintStep();
+}
+
+function stopHint() {
+  if (!hint) return;
+  for (const t of hint.timers) clearTimeout(t);
+  if (hint.layer) hint.layer.remove();
+  hint = null;
+  document.querySelectorAll('.hint-src').forEach((n) => n.classList.remove('hint-src'));
+  document.querySelectorAll('.hint-dest').forEach((n) => n.classList.remove('hint-dest'));
+  if (game) renderDock();
+}
+
+/** Where the top of a dropped card would come to rest inside a column. */
+function landingTop(colIndex) {
+  const col = game.state.columns[colIndex];
+  if (!col.length) return 0;
+  const nodes = document.querySelectorAll(`.card[data-col="${colIndex}"]`);
+  const last = nodes[nodes.length - 1];
+  if (!last) return 0;
+  return parseFloat(last.style.top || 0) + (col[col.length - 1].faceUp ? offsets.up : offsets.down);
+}
+
+function showHintStep() {
+  if (!hint) return;
+  const move = hint.moves[hint.index];
+  renderBoard();
+  renderDock();
+
+  const run = game.takeRun(move.from);
+  const board = $('#board');
+  const src = move.from.zone === 'reserve'
+    ? document.querySelector(`.cell[data-cell="${move.from.index}"]`)
+    : document.querySelector(
+      `.card[data-col="${move.from.index}"][data-idx="${game.state.columns[move.from.index].length - move.from.count}"]`);
+  const destCol = document.querySelector(`.col[data-col="${move.to.index}"]`);
+  if (!src || !destCol || !board) return;
+
+  const from = src.getBoundingClientRect();
+  const to = destCol.getBoundingClientRect();
+  const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
+  const gap = h * (document.body.classList.contains('compact-cards') ? 0.36 : 0.30);
+  const landing = to.top + landingTop(move.to.index);
+
+  const layer = el('div', 'hint-layer');
+  const nodes = run.map((card, i) => {
+    const n = cardEl(card);
+    n.style.left = from.left + 'px';
+    n.style.top = from.top + i * gap + 'px';
+    layer.appendChild(n);
+    return n;
+  });
+  document.body.appendChild(layer);
+  hint.layer = layer;
+
+  // Two frames, so the browser paints the start before it animates away.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    nodes.forEach((n, i) => {
+      n.style.left = to.left + 'px';
+      n.style.top = landing + i * gap + 'px';
+    });
+  }));
+
+  hint.timers.push(setTimeout(() => {
+    if (!hint) return;
+    layer.remove();
+    hint.layer = null;
+    hint.index = (hint.index + 1) % hint.moves.length;
+    showHintStep();
+  }, 1000));
+}
+
+/**
+ * Any real action dismisses the carousel. This runs in the capture phase, so
+ * it must not re-render the board -- the pointerdown still has to reach the
+ * card element it was aimed at.
+ */
+function cancelHint(ev) {
+  if (!hint) return;
+  if (ev && ev.target.closest && ev.target.closest('#btn-hint')) return;
+  stopHint();
+}
+
 // ----------------------------------------------------------------- input
 
 function cardRef(node) {
@@ -298,11 +408,7 @@ function onPointerDown(ev) {
   if (cellEl) return onCellTap(Number(cellEl.dataset.cell));
 
   const node = ev.target.closest('.card');
-  if (!node) {
-    const colEl = ev.target.closest('.col');
-    if (colEl) onColumnTap(Number(colEl.dataset.col));
-    return;
-  }
+  if (!node) return;
   const { col, idx } = cardRef(node);
   const column = game.state.columns[col];
   const card = column[idx];
@@ -315,12 +421,11 @@ function onPointerDown(ev) {
   }
 
   const count = column.length - idx;
-  const grabbable = game.canGrab(col, count);
-
   drag = {
     zone: 'col', index: col, count, active: false,
-    startX: ev.clientX, startY: ev.clientY, grabbable, node,
-    touch: ev.pointerType === 'touch', idx,
+    startX: ev.clientX, startY: ev.clientY, node, idx,
+    grabbable: game.canGrab(col, count),
+    touch: ev.pointerType === 'touch',
   };
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp, { once: true });
@@ -356,7 +461,6 @@ function startDrag(ev) {
   });
   drag.layer = layer;
   document.body.appendChild(layer);
-  selection = null;
   renderBoard();
   markTargets(run, true);
 }
@@ -383,9 +487,9 @@ function onPointerUp(ev) {
   window.removeEventListener('pointercancel', onPointerCancel);
   if (!drag) return;
   const d = drag;
+  drag = null;
   if (d.active) {
     d.layer.remove();
-    drag = null;
     const under = document.elementFromPoint(ev.clientX, ev.clientY - (d.touch ? TOUCH_LIFT : 0));
     const cell = under && under.closest('.cell');
     const colEl = under && under.closest('.col');
@@ -395,45 +499,19 @@ function onPointerUp(ev) {
     } else afterAction();
     return;
   }
-  drag = null;
-  // Touch has no dblclick worth trusting once touch-action is off, so pair up
-  // two quick taps on the same card ourselves.
-  if (d.touch) {
-    const now = Date.now();
-    const same = lastTap && lastTap.col === d.index && lastTap.idx === d.idx
-      && now - lastTap.at < 320;
-    lastTap = { col: d.index, idx: d.idx, at: now };
-    if (same) {
-      lastTap = null;
-      const target = game.autoTarget(d.index, d.count);
-      if (target !== null) {
-        selection = null;
-        return void attempt({ zone: 'col', index: d.index, count: d.count }, { zone: 'col', index: target });
-      }
-    }
-  }
-  onCardTap(d.index, d.count, d.grabbable);
+  onCardTap(d);
 }
 
-function onCardTap(colIndex, count, grabbable) {
-  if (selection && !(selection.zone === 'col' && selection.index === colIndex)) {
-    if (attempt(selection, { zone: 'col', index: colIndex })) return;
-  }
-  if (selection && selection.zone === 'col' && selection.index === colIndex && selection.count === count) {
-    selection = null;
-  } else if (grabbable) {
-    selection = { zone: 'col', index: colIndex, count };
-  } else {
-    selection = null;
-  }
-  const run = selection ? game.state.columns[colIndex].slice(-count) : null;
-  render();
-  markTargets(run, !!selection);
-}
-
-function onColumnTap(colIndex) {
-  if (!selection) return;
-  attempt(selection, { zone: 'col', index: colIndex });
+/**
+ * A tap is not a selection: it plays the card straight to wherever it builds
+ * the longest sequence. Drag when you want a say in the matter.
+ */
+function onCardTap(d) {
+  if (!d.grabbable) return nudge(d.node);
+  const from = { zone: 'col', index: d.index, count: d.count };
+  const target = game.bestTargetFor(from);
+  if (target === null) return nudge(d.node);
+  attempt(from, { zone: 'col', index: target });
 }
 
 function onCellTap(index) {
@@ -443,29 +521,10 @@ function onCellTap(index) {
     if (game.awaken({ zone: 'reserve', index })) { armed = null; afterAction(); }
     return;
   }
-  if (selection) {
-    if (selection.zone === 'reserve' && selection.index === index) { selection = null; return render(); }
-    if (attempt(selection, { zone: 'reserve', index })) return;
-  }
-  if (card) {
-    selection = { zone: 'reserve', index, count: 1 };
-    render();
-    markTargets([card], true);
-  }
-}
-
-function onDoubleClick(ev) {
-  if (!game || game.state.phase !== 'play' || armed) return;
-  const node = ev.target.closest('.card');
-  if (!node) return;
-  const { col, idx } = cardRef(node);
-  const column = game.state.columns[col];
-  if (!column[idx] || !column[idx].faceUp) return;
-  const count = column.length - idx;
-  const target = game.autoTarget(col, count);
-  if (target === null) return;
-  selection = null;
-  attempt({ zone: 'col', index: col, count }, { zone: 'col', index: target });
+  if (!card) return;
+  const from = { zone: 'reserve', index };
+  const target = game.bestTargetFor(from);
+  if (target !== null) attempt(from, { zone: 'col', index: target });
 }
 
 // -------------------------------------------------------------- overlays
@@ -510,8 +569,9 @@ function rulesHtml() {
       <h3>The Tableau</h3>
       <ul>
         <li>Build <b>down by rank</b> onto any card — suit does not matter while stacking.</li>
-        <li>Lift a group only when it is a <b>descending run of one suit</b>. Drag it, or tap to pick up and tap to place.</li>
-        <li><b>Double-click</b> a card to send it to the best spot automatically.</li>
+        <li>Lift a group only when it is a <b>descending run of one suit</b>.</li>
+        <li><b>Tap or click a card</b> and it flies to whichever column builds the
+        longest sequence. Drag it instead when you want a different column.</li>
         <li>An empty column accepts anything. The stock deals one card to every column — but only when no column stands empty.</li>
       </ul>
       <h3>Cultivation</h3>
@@ -525,9 +585,10 @@ function rulesHtml() {
       <ul>
         <li><b>Talismans</b> (☯) stand in for any rank and suit, in a stack or inside a sealed meridian.</li>
         <li><b>Void Step</b>, <b>Transmute</b> and <b>Awaken</b> are charges: arm the button, then click a card.</li>
-        <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>Esc</b> clears a selection.</li>
-        <li>On a touchscreen: drag a card, or tap to pick up and tap to place.
-        <b>Double-tap</b> sends it to its best home.</li>
+        <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
+        <li>Stuck? <b>Hint</b> walks every move the position offers, one a
+        second, showing where each one lands — best first. Anything you do
+        stops it.</li>
       </ul>
     </div>
   </details>`;
@@ -699,10 +760,9 @@ function save() {
 }
 
 function start(seed, difficulty) {
+  stopHint();
   game = new Game({ seed, difficulty });
-  selection = null;
   armed = null;
-  lastSeen.meridians = 0;
   closeOverlay();
   render();
 }
@@ -716,24 +776,29 @@ function bindChrome() {
   });
   for (const [sel, mode] of [['#btn-void', 'void'], ['#btn-transmute', 'transmute'], ['#btn-awaken', 'awaken']]) {
     $(sel).addEventListener('click', () => {
+      stopHint();
       armed = armed === mode ? null : mode;
-      selection = null;
       render();
     });
   }
   $('#btn-menu').addEventListener('click', () => {
+    stopHint();
     if (!game) titleScreen();
     else pauseScreen();
   });
+  $('#btn-hint').addEventListener('click', () => { if (hint) stopHint(); else startHint(); });
   $('#board').addEventListener('pointerdown', onPointerDown);
-  $('#board').addEventListener('dblclick', onDoubleClick);
   $('#cells').addEventListener('pointerdown', onPointerDown);
+  // Anything the player actually does dismisses a running hint.
+  document.addEventListener('pointerdown', cancelHint, true);
   const relayout = () => { if (game && $('#overlay').hidden) render(); else if (game) renderBoard(); };
   window.addEventListener('resize', relayout);
   window.addEventListener('orientationchange', () => setTimeout(relayout, 120));
   window.addEventListener('keydown', (e) => {
     if (!game || game.state.phase !== 'play') return;
-    if (e.key === 'Escape') { selection = null; armed = null; markTargets(null, false); render(); }
+    if (e.key === 'Escape') { stopHint(); armed = null; markTargets(null, false); render(); }
+    if (e.key === 'h') { e.preventDefault(); if (hint) stopHint(); else startHint(); return; }
+    cancelHint();
     if ((e.key === 'z' && (e.metaKey || e.ctrlKey)) || e.key === 'u') {
       e.preventDefault();
       if (game.undo()) afterAction();

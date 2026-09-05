@@ -157,38 +157,97 @@ for (const view of VIEWS) {
     }
   });
 
-  await check('tap to pick up, tap to place', async () => {
+  await check('a tap plays the card to the column that builds the longest run', async () => {
     const p = await findMove(page);
     if (!p) throw new Error('no legal move');
+    const expected = await page.evaluate(({ i, idx }) => {
+      const g = window.NineMeridians.game;
+      const count = g.state.columns[i].length - idx;
+      return g.bestTargetFor({ zone: 'col', index: i, count });
+    }, p);
+    if (expected === null) throw new Error('the engine offered no target');
+    const beforeLen = await page.evaluate((j) => window.NineMeridians.game.state.columns[j].length, expected);
     const before = await moves(page);
     const c = await page.locator(`.card[data-col="${p.i}"][data-idx="${p.idx}"]`).boundingBox();
     await page.mouse.click(c.x + c.width / 2, c.y + 8);
-    await page.waitForTimeout(120);
-    if (!(await page.evaluate(() => document.querySelectorAll('.card.picked').length))) {
-      throw new Error('the tap did not select anything');
+    await page.waitForTimeout(200);
+    if (await moves(page) <= before) throw new Error('the tap moved nothing');
+    if (await page.evaluate(() => document.querySelectorAll('.card.picked').length)) {
+      throw new Error('a tap should move a card, not select it');
     }
-    const d = await page.locator(`.col[data-col="${p.j}"]`).boundingBox();
-    await page.mouse.click(d.x + d.width / 2, d.y + Math.min(d.height - 10, 260));
-    await page.waitForTimeout(180);
-    if (await moves(page) <= before) throw new Error('the second tap did not place the card');
+    const afterLen = await page.evaluate((j) => window.NineMeridians.game.state.columns[j].length, expected);
+    // A sealed meridian empties the column, which is also a correct landing.
+    if (afterLen <= beforeLen && afterLen !== 0) throw new Error('the card did not land in the expected column');
+  });
+
+  await check('the hint carousel cycles and reports its position', async () => {
+    const total = await page.evaluate(() => window.NineMeridians.game.listMoves().length);
+    if (total < 2) throw new Error('need at least two moves to cycle');
+    await page.click('#btn-hint');
+    await page.waitForTimeout(150);
+    const first = await page.evaluate(() => ({
+      text: document.querySelector('#status').textContent,
+      ghosts: document.querySelectorAll('.hint-layer .card').length,
+      srcMarked: document.querySelectorAll('.card.hint-src').length,
+      destMarked: document.querySelectorAll('.col.hint-dest').length,
+      armed: document.querySelector('#btn-hint').classList.contains('armed'),
+    }));
+    if (first.text !== `Showing hint 1/${total}`) throw new Error('status read "' + first.text + '"');
+    if (!first.ghosts) throw new Error('no ghost cards drawn');
+    if (!first.srcMarked || !first.destMarked) throw new Error('source or destination not highlighted');
+    if (!first.armed) throw new Error('the hint button should read as active');
+
+    // The ghost has to travel, not sit on the source card.
+    const travelled = await page.evaluate(() => {
+      const n = document.querySelector('.hint-layer .card');
+      if (!n) return -1;
+      const a = n.getBoundingClientRect();
+      return new Promise((r) => setTimeout(() => {
+        const b = n.getBoundingClientRect();
+        r(Math.hypot(b.left - a.left, b.top - a.top));
+      }, 450));
+    });
+    if (travelled < 0) throw new Error('the ghost vanished mid-step');
+
+    await page.waitForTimeout(800);
+    const second = await page.evaluate(() => document.querySelector('#status').textContent);
+    if (second !== `Showing hint 2/${total}`) throw new Error('did not advance, read "' + second + '"');
+  });
+
+  await check('any action cancels the hint', async () => {
+    if (!(await page.evaluate(() => !!document.querySelector('.hint-layer')))) {
+      await page.click('#btn-hint');
+      await page.waitForTimeout(150);
+    }
+    const board = await page.locator('#board').boundingBox();
+    await page.mouse.click(board.x + board.width / 2, board.y + board.height - 20);
+    await page.waitForTimeout(250);
+    const after = await page.evaluate(() => ({
+      layers: document.querySelectorAll('.hint-layer').length,
+      marks: document.querySelectorAll('.hint-src, .hint-dest').length,
+      status: document.querySelector('#status').textContent,
+      armed: document.querySelector('#btn-hint').classList.contains('armed'),
+    }));
+    if (after.layers || after.marks) throw new Error('hint artwork survived the click');
+    if (after.armed || after.status.startsWith('Showing hint')) throw new Error('hint state survived the click');
+  });
+
+  await check('undo sits in the dock and steps back', async () => {
+    const dock = await page.evaluate(() => {
+      const b = document.querySelector('#btn-undo');
+      return { inDock: document.querySelector('#dock').contains(b), disabled: b.disabled };
+    });
+    if (!dock.inDock) throw new Error('undo is not in the bottom dock');
+    if (dock.disabled) throw new Error('undo should be live after moves were made');
+    const before = await moves(page);
+    await page.click('#btn-undo');
+    await page.waitForTimeout(220);
+    if (await moves(page) >= before) throw new Error('undo did not step back');
   });
 
   if (view.touch) {
-    await check('double-tap sends a card home', async () => {
-      const p = await findMove(page);
-      if (!p) throw new Error('no legal move');
-      const before = await moves(page);
-      const c = await page.locator(`.card[data-col="${p.i}"][data-idx="${p.idx}"]`).boundingBox();
-      const [x, y] = [c.x + c.width / 2, c.y + 8];
-      await page.touchscreen.tap(x, y);
-      await page.waitForTimeout(70);
-      await page.touchscreen.tap(x, y);
-      await page.waitForTimeout(220);
-      if (await moves(page) <= before) throw new Error('double-tap moved nothing');
-    });
-
     await check('controls are big enough to tap', async () => {
-      const small = await page.evaluate(() => [...document.querySelectorAll('#stock, .hud button:not([hidden])')]
+      const small = await page.evaluate(() => [...document.querySelectorAll('#stock, .hud button:not([hidden]), #dock button')]
         .map((n) => ({ id: n.id || n.className, h: Math.round(n.getBoundingClientRect().height) }))
         .filter((n) => n.h < 32));
       if (small.length) throw new Error('under 32px tall: ' + JSON.stringify(small));

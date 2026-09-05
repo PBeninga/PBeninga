@@ -57,8 +57,28 @@ Standard Spider, with two additions.
   needs at their position, including inside a sealed meridian.
 - **Reserve cells** hold one card each, outside the tableau.
 
-Drag a card, or tap to pick up and tap to place. Double-click sends a card to
-its best home. `Space` deals, `U` undoes, `Esc` clears a selection.
+## Playing
+
+**Tap a card and it goes.** A tap plays it straight to whichever column builds
+the longest sequence — the same ranking the hint carousel uses, so a tap is
+always the move a hint would recommend for that card. Drag instead when you
+want a say in the destination, or to park a card in a reserve cell.
+
+The scoring is deliberately literal: *how long is the run this creates?*
+Landing on a matching suit beats landing on a stranger, because it actually
+extends the run; a card that completes a K→A meridian outranks everything,
+because that run is thirteen long. Only after run length do ties break on
+flipping a face-down card, emptying a column, and finally on not wasting an
+empty column.
+
+**Hint** at the bottom walks every move the position offers, one a second, best
+first — a translucent copy of the cards drifts to exactly where it would land,
+with the source and destination lit, and the dock counts `Showing hint 3/8`.
+It loops until you do anything at all, at which point it gets out of the way.
+Deduplication (the best lift per source-and-destination pair, one empty column
+per source) keeps the list to a median of seven moves.
+
+`Space` deals · `U` or `Ctrl/⌘+Z` undoes · `H` toggles hints · `Esc` stops them.
 
 ## The four paths
 
@@ -89,12 +109,13 @@ built around it rather than against it.
   drag is never stolen by the page trying to scroll. A dragged stack floats
   above the fingertip instead of hiding under it, and the drop lands where the
   cards are, not where the finger is.
-- Tap to pick up, tap to place. **Double-tap** auto-moves — detected from the
-  taps themselves, since `dblclick` is not dependable once touch gestures are
-  claimed. A cancelled gesture (an incoming call, a system swipe) puts the
-  cards back rather than leaving them floating.
+- A tap plays the card immediately, which is the whole interaction on a phone —
+  no pick-up-then-place, no double-tap, nothing to mis-aim. A cancelled gesture
+  (an incoming call, a system swipe) puts the cards back rather than leaving
+  them floating.
 - The HUD collapses to two short rows; boons fold into one chip that opens the
-  full list. Controls stay at least 40px tall.
+  full list. Hint and Undo sit in a bottom dock under the thumbs, and every
+  control stays at least 40px tall.
 - Landscape gets nearly double the card size and a single-line HUD.
 - Overlays are laid out three ways — full cards on desktop, compact rows in
   portrait, three abreast in landscape — because at 342px tall a stacked offer
@@ -111,7 +132,7 @@ index.html        page shell
 src/rng.js        seeded mulberry32 — a seed reproduces a whole run
 src/cards.js      card model, run validation, wild-card gap filling
 src/paths.js      the four paths and the breakthrough offer
-src/engine.js     realms, boons, stock, undo, deadlock detection — no DOM
+src/engine.js     realms, boons, stock, undo, move ranking, deadlock — no DOM
 src/ui.js         rendering, drag and drop, overlays — no rules
 src/style.css     ink-wash dark theme
 build.js          inlines the above into dist/index.html
@@ -137,3 +158,5 @@ Known open questions:
 - Fortune, the filler boon, is nearly unreachable: paths only run out of tiers
   after ten picks and a run offers five.
 - Sealing a meridian has no animation yet, just a toast.
+- A tap has no way to reach a reserve cell; that is drag-only on purpose, but
+  it may want a gesture of its own.

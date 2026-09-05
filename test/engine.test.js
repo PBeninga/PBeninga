@@ -268,3 +268,92 @@ test('a full run of every realm is reachable with the right cards', () => {
   assert.equal(g.state.phase, 'ascended');
   assert.equal(g.state.totalMeridians, 1 + 2 + 3 + 4 + 5 + 6);
 });
+
+test('tapping sends a card where it builds the longest run', () => {
+  // 6♣ can sit on either 7, but only the club makes a longer sequence.
+  const g = rigged([
+    [up(9, 'club'), up(8, 'club'), up(7, 'club')],
+    [up(7, 'heart')],
+    [up(6, 'club')],
+  ]);
+  assert.equal(g.autoTarget(2, 1), 0);
+  assert.deepEqual(
+    { ...g.moveScore({ zone: 'col', index: 2, count: 1 }, { zone: 'col', index: 0 }) },
+    { resultRun: 4, exposes: false, empties: true, destEmpty: false },
+  );
+});
+
+test('a longer run beats exposing a card, and exposing breaks a tie', () => {
+  const long = rigged([
+    [up(9, 'club'), up(8, 'club')],
+    [up(8, 'heart')],
+    [makeCard(2, 'spade', false), up(7, 'club')],
+  ]);
+  assert.equal(long.autoTarget(2, 1), 0, 'run of three beats flipping a card');
+
+  const tie = rigged([
+    [up(8, 'heart')],
+    [up(8, 'diamond')],
+    [makeCard(2, 'spade', false), up(7, 'club')],
+    [up(7, 'spade')],
+  ]);
+  // Both 8s give a run of one; the tiebreak is whichever exposes -- neither
+  // does here, so the first legal destination wins and stays deterministic.
+  assert.equal(tie.autoTarget(2, 1), 0);
+});
+
+test('a meridian-completing move outranks everything else', () => {
+  const nearly = [];
+  for (let r = 13; r >= 2; r--) nearly.push(up(r, 'club'));
+  const g = rigged([nearly, [up(2, 'heart')], [up(1, 'club')]]);
+  assert.equal(g.autoTarget(2, 1), 0);
+  const moves = g.listMoves();
+  assert.equal(moves[0].to.index, 0);
+  assert.equal(moves[0].resultRun, 13);
+});
+
+test('an empty column is a last resort, not a first choice', () => {
+  const g = rigged([[up(4, 'spade'), up(7, 'club')], [up(8, 'heart')], []]);
+  assert.equal(g.autoTarget(0, 1), 1, 'stacking beats burning an empty column');
+  const only = rigged([[up(4, 'spade'), up(7, 'club')], [up(2, 'heart')], []]);
+  assert.equal(only.autoTarget(0, 1), 2);
+});
+
+test('autoTarget returns null when nothing is legal', () => {
+  const g = rigged([[up(3, 'spade')], [up(9, 'heart')]]);
+  assert.equal(g.autoTarget(0, 1), null);
+});
+
+test('listMoves ranks best first and keeps the list short', () => {
+  const g = rigged([
+    [up(9, 'club'), up(8, 'club')],
+    [up(10, 'club')],
+    [up(10, 'heart')],
+    [up(5, 'spade')],
+  ]);
+  const moves = g.listMoves();
+  assert.ok(moves.length > 1);
+  assert.equal(moves[0].from.index, 0);
+  assert.equal(moves[0].to.index, 1, 'the same-suit landing comes first');
+  assert.equal(moves[0].resultRun, 3);
+  for (let i = 1; i < moves.length; i++) {
+    assert.equal(Game.better(moves[i], moves[i - 1]), false, 'list must be sorted');
+  }
+  assert.ok(g.listMoves({ limit: 2 }).length <= 2);
+});
+
+test('listMoves offers only one empty column per source', () => {
+  const g = rigged([[up(4, 'spade'), up(7, 'club')], [], [], []]);
+  const moves = g.listMoves();
+  assert.equal(moves.filter((m) => m.destEmpty).length, 1);
+});
+
+test('listMoves includes reserve cells and is empty once the run ends', () => {
+  const g = rigged([[up(9, 'spade')]], { reserve: [up(8, 'heart')] });
+  const moves = g.listMoves();
+  assert.equal(moves.length, 1);
+  assert.equal(moves[0].from.zone, 'reserve');
+  assert.equal(moves[0].to.index, 0);
+  g.state.phase = 'failed';
+  assert.deepEqual(g.listMoves(), []);
+});

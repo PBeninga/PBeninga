@@ -410,27 +410,102 @@ export class Game {
   // -------------------------------------------------------------- helper
 
   /** Best legal destination for the run at the foot of `colIndex`, or null. */
-  autoTarget(colIndex, count) {
+  /**
+   * How good is this landing? A player reads it as "put the card where it makes
+   * the longest sequence", so run length comes first and everything else only
+   * breaks ties.
+   */
+  moveScore(from, to) {
+    const run = this.takeRun(from);
+    const dest = this.state.columns[to.index];
+    const src = from.zone === 'col' ? this.state.columns[from.index] : null;
+    const under = src && src.length > run.length ? src[src.length - run.length - 1] : null;
+    return {
+      resultRun: movableTail(dest.concat(run), { mixedSuit: this.mixedSuitMoves() }),
+      exposes: !!(under && !under.faceUp),
+      empties: !!(src && src.length === run.length),
+      destEmpty: dest.length === 0,
+    };
+  }
+
+  /** True when `a` is the move a thoughtful player would rather make. */
+  static better(a, b) {
+    if (a.resultRun !== b.resultRun) return a.resultRun > b.resultRun;
+    if (a.exposes !== b.exposes) return a.exposes;
+    if (a.empties !== b.empties) return a.empties;
+    if (a.destEmpty !== b.destEmpty) return !a.destEmpty;
+    return false;
+  }
+
+  /** Destination column that builds the longest run, or null if there is none. */
+  bestTargetFor(from) {
     const s = this.state;
-    if (!this.canGrab(colIndex, count)) return null;
-    const run = s.columns[colIndex].slice(s.columns[colIndex].length - count);
-    const info = runInfo(run, { sameSuit: !this.mixedSuitMoves() });
-    let empty = null;
-    let offSuit = null;
+    if (from.zone === 'col' && !this.canGrab(from.index, from.count)) return null;
+    const run = this.takeRun(from);
+    if (!run || !run.length || run.some((c) => !c.faceUp)) return null;
+    let best = null;
+    let bestIndex = null;
     for (let j = 0; j < s.columns.length; j++) {
-      if (j === colIndex) continue;
-      const col = s.columns[j];
-      if (!col.length) {
-        if (count !== s.columns[colIndex].length && empty === null) empty = j;
-        continue;
-      }
+      if (from.zone === 'col' && j === from.index) continue;
+      if (!s.columns[j].length && from.zone === 'col' && from.count === s.columns[from.index].length) continue;
       if (!this.canDrop(run, { zone: 'col', index: j })) continue;
-      const target = col[col.length - 1];
-      if (target.wild || info.suit === null || target.suit === info.suit) return j;
-      if (offSuit === null) offSuit = j;
+      const score = this.moveScore(from, { zone: 'col', index: j });
+      if (!best || Game.better(score, best)) { best = score; bestIndex = j; }
     }
-    if (offSuit !== null) return offSuit;
-    return empty;
+    return bestIndex;
+  }
+
+  autoTarget(colIndex, count) {
+    return this.bestTargetFor({ zone: 'col', index: colIndex, count });
+  }
+
+  /**
+   * Every legal tableau move, best first -- the source of the hint carousel.
+   * Only the best lift is kept per source/destination pair, and only one empty
+   * destination per source; without that the same idea appears many times over.
+   * What survives runs a median of seven moves and tops out around fourteen,
+   * which is short enough to page through in full.
+   */
+  listMoves({ limit = 0 } = {}) {
+    const s = this.state;
+    if (s.phase !== 'play') return [];
+    const out = [];
+    const emptySeen = new Set();
+
+    const consider = (from, key) => {
+      const run = this.takeRun(from);
+      if (!run || !run.length || run.some((c) => !c.faceUp)) return;
+      for (let j = 0; j < s.columns.length; j++) {
+        if (from.zone === 'col' && j === from.index) continue;
+        const destEmpty = s.columns[j].length === 0;
+        if (destEmpty && from.zone === 'col' && from.count === s.columns[from.index].length) continue;
+        if (destEmpty && emptySeen.has(key)) continue;
+        if (!this.canDrop(run, { zone: 'col', index: j })) continue;
+        if (destEmpty) emptySeen.add(key);
+        out.push({ from, to: { zone: 'col', index: j }, ...this.moveScore(from, { zone: 'col', index: j }) });
+      }
+    };
+
+    for (let i = 0; i < s.columns.length; i++) {
+      const tail = this.columnTail(i);
+      const perDest = new Map();
+      for (let n = 1; n <= tail; n++) {
+        const from = { zone: 'col', index: i, count: n };
+        const before = out.length;
+        consider(from, `c${i}`);
+        for (const m of out.splice(before)) {
+          const key = m.to.index;
+          if (!perDest.has(key) || Game.better(m, perDest.get(key))) perDest.set(key, m);
+        }
+      }
+      out.push(...perDest.values());
+    }
+    for (let i = 0; i < s.reserve.length; i++) {
+      if (s.reserve[i]) consider({ zone: 'reserve', index: i }, `r${i}`);
+    }
+
+    out.sort((a, b) => (Game.better(a, b) ? -1 : Game.better(b, a) ? 1 : 0));
+    return limit ? out.slice(0, limit) : out;
   }
 
   score() {
