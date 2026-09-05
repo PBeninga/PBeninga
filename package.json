@@ -1,7 +1,7 @@
 {
-  "name": "nine-meridians",
+  "name": "ascendant",
   "version": "0.1.0",
-  "description": "A cultivation roguelike played in Spider solitaire.",
+  "description": "A progression-fantasy roguelike played in Spider solitaire.",
   "type": "module",
   "private": true,
   "scripts": {

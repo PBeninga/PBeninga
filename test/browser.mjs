@@ -69,7 +69,7 @@ function dragBy(page, type, sx, sy, ex, ey) {
 
 /** Any single card that can legally move to another column, per the engine. */
 const findMove = (page) => page.evaluate(() => {
-  const g = window.NineMeridians.game;
+  const g = window.Ascendant.game;
   for (let i = 0; i < g.state.columns.length; i++) {
     const col = g.state.columns[i];
     if (col.length < 2) continue;
@@ -80,7 +80,7 @@ const findMove = (page) => page.evaluate(() => {
   return null;
 });
 
-const moves = (page) => page.evaluate(() => window.NineMeridians.game.state.moves);
+const moves = (page) => page.evaluate(() => window.Ascendant.game.state.moves);
 
 /** Escape stops any running hint, so a check starts from a known state. */
 async function hintOff(page) {
@@ -91,13 +91,13 @@ async function hintOff(page) {
 // Checks that rig the board by hand leave it holding the wrong cards, which
 // later trips the save's conservation check. Stash the real state around them.
 const stash = (page) => page.evaluate(() => {
-  window.__stash = structuredClone(window.NineMeridians.game.state);
+  window.__stash = structuredClone(window.Ascendant.game.state);
 });
 const unstash = (page) => page.evaluate(() => {
-  const g = window.NineMeridians.game;
+  const g = window.Ascendant.game;
   g.state = window.__stash;
   g.undoStack = [];
-  window.NineMeridians.render();
+  window.Ascendant.render();
 });
 
 const browser = await chromium.launch();
@@ -149,12 +149,12 @@ for (const view of VIEWS) {
 
   await check('a save from an incompatible build is dropped, not resumed', async () => {
     await page.evaluate(() => {
-      // A realm-1 save claiming a one-sequence quota and holding no cards:
+      // A rank-1 save claiming a one-sequence quota and holding no cards:
       // exactly the shape the old rules wrote, and unaccountable under these.
-      localStorage.setItem('nine-meridians/run', JSON.stringify({
+      localStorage.setItem('ascendant/run', JSON.stringify({
         v: 1, seed: 'STALE', difficulty: 'adept', rng: 1,
         state: {
-          phase: 'play', realm: 1, required: 1, meridians: 0, totalMeridians: 0,
+          phase: 'play', rank: 1, required: 1, runes: 0, totalRunes: 0,
           collected: [], columns: [[]], reserve: [], stock: [], boons: {}, fortune: 0,
           charges: { voidStep: 0, transmute: 0, awaken: 0 }, undosLeft: 3, moves: 0,
           offer: [], log: [],
@@ -165,7 +165,7 @@ for (const view of VIEWS) {
     await page.waitForTimeout(250);
     const r = await page.evaluate(() => ({
       resume: !!document.querySelector('#resume-wrap button'),
-      stored: localStorage.getItem('nine-meridians/run'),
+      stored: localStorage.getItem('ascendant/run'),
     }));
     if (r.resume) throw new Error('offered to resume a save the rules cannot honour');
     if (r.stored) throw new Error('the dead save was left in storage');
@@ -241,12 +241,12 @@ for (const view of VIEWS) {
     const p = await findMove(page);
     if (!p) throw new Error('no legal move');
     const expected = await page.evaluate(({ i, idx }) => {
-      const g = window.NineMeridians.game;
+      const g = window.Ascendant.game;
       const count = g.state.columns[i].length - idx;
       return g.bestTargetFor({ zone: 'col', index: i, count });
     }, p);
     if (expected === null) throw new Error('the engine offered no target');
-    const beforeLen = await page.evaluate((j) => window.NineMeridians.game.state.columns[j].length, expected);
+    const beforeLen = await page.evaluate((j) => window.Ascendant.game.state.columns[j].length, expected);
     const before = await moves(page);
     const c = await page.locator(`.card[data-col="${p.i}"][data-idx="${p.idx}"]`).boundingBox();
     await page.mouse.click(c.x + c.width / 2, c.y + 8);
@@ -255,7 +255,7 @@ for (const view of VIEWS) {
     if (await page.evaluate(() => document.querySelectorAll('.card.picked').length)) {
       throw new Error('a tap should move a card, not select it');
     }
-    const afterLen = await page.evaluate((j) => window.NineMeridians.game.state.columns[j].length, expected);
+    const afterLen = await page.evaluate((j) => window.Ascendant.game.state.columns[j].length, expected);
     // A sealed meridian empties the column, which is also a correct landing.
     if (afterLen <= beforeLen && afterLen !== 0) throw new Error('the card did not land in the expected column');
   });
@@ -287,7 +287,7 @@ for (const view of VIEWS) {
 
   await check('the hint carousel cycles and reports its position', async () => {
     const plan = await page.evaluate(() => {
-      const s = window.NineMeridians.game.suggest();
+      const s = window.Ascendant.game.suggest();
       return { kind: s.kind, total: s.moves.length };
     });
     if (plan.kind !== 'moves') throw new Error('expected move suggestions, got ' + plan.kind);
@@ -329,12 +329,12 @@ for (const view of VIEWS) {
     await hintOff(page);
     await stash(page);
     const r = await page.evaluate(() => {
-      const g = window.NineMeridians.game;
+      const g = window.Ascendant.game;
       g.state.columns[2] = [];          // as if a meridian had just sealed
-      window.NineMeridians.render();
+      window.Ascendant.render();
       const before = g.state.stock.length;
       const dealt = g.deal();
-      window.NineMeridians.render();
+      window.Ascendant.render();
       return { dealt, before, after: g.state.stock.length,
         filled: g.state.columns[2].length, status: document.querySelector('#status').textContent };
     });
@@ -349,7 +349,7 @@ for (const view of VIEWS) {
     await hintOff(page);
     await stash(page);
     await page.evaluate(() => {
-      const g = window.NineMeridians.game;
+      const g = window.Ascendant.game;
       // Every column two face-up cards that cannot stack, and stock in hand.
       g.state.columns = g.state.columns.map((_, i) => [
         { id: 7000 + i * 2, rank: 2, suit: 'spade', faceUp: true, wild: false },
@@ -357,12 +357,12 @@ for (const view of VIEWS) {
       ]);
       g.state.stock = [{ id: 7900, rank: 5, suit: 'club', faceUp: false, wild: false }];
       g.state.reserve = [];
-      window.NineMeridians.render();
+      window.Ascendant.render();
     });
     await page.click('#btn-hint');
     await page.waitForTimeout(200);
     const r = await page.evaluate(() => ({
-      kind: window.NineMeridians.game.suggest().kind,
+      kind: window.Ascendant.game.suggest().kind,
       status: document.querySelector('#status').textContent,
       pulsing: document.querySelector('#stock').classList.contains('hint-deal'),
     }));
@@ -424,8 +424,8 @@ for (const view of VIEWS) {
   await check('the stock shows one card back per remaining deal', async () => {
     const read = () => page.evaluate(() => ({
       backs: document.querySelectorAll('#stock .stock-card:not(.empty)').length,
-      deals: window.NineMeridians.game.dealsLeft(),
-      cards: window.NineMeridians.game.state.stock.length,
+      deals: window.Ascendant.game.dealsLeft(),
+      cards: window.Ascendant.game.state.stock.length,
       label: document.querySelector('.stock-count').textContent,
     }));
     const before = await read();
@@ -446,8 +446,8 @@ for (const view of VIEWS) {
   await check('a spent stock says so', async () => {
     await stash(page);
     await page.evaluate(() => {
-      window.NineMeridians.game.state.stock = [];
-      window.NineMeridians.render();
+      window.Ascendant.game.state.stock = [];
+      window.Ascendant.render();
     });
     await page.waitForTimeout(150);
     const r = await page.evaluate(() => ({
@@ -464,8 +464,8 @@ for (const view of VIEWS) {
 
   await check('a live run resumes exactly where it left off', async () => {
     const snap = () => page.evaluate(() => {
-      const g = window.NineMeridians.game;
-      return { realm: g.state.realm, required: g.state.required, meridians: g.state.meridians,
+      const g = window.Ascendant.game;
+      return { rank: g.state.rank, required: g.state.required, runes: g.state.runes,
         moves: g.state.moves, board: g.state.columns.map((c) => c.map((x) => x.id).join('.')).join('|') };
     });
     const before = await snap();
@@ -485,7 +485,7 @@ for (const view of VIEWS) {
 
   await check('cards that cannot be lifted are dimmed', async () => {
     const r = await page.evaluate(() => {
-      const g = window.NineMeridians.game;
+      const g = window.Ascendant.game;
       const wrong = [];
       let faceUp = 0;
       let dimmed = 0;
@@ -512,14 +512,14 @@ for (const view of VIEWS) {
     await hintOff(page);
     await stash(page);
     const start = await page.evaluate(() => {
-      const N = window.NineMeridians, g = N.game;
+      const N = window.Ascendant, g = N.game;
       const col = [];
       for (let r = 13; r >= 2; r--) col.push({ id: 9100 + r, rank: r, suit: 'spade', faceUp: true, wild: false });
       g.state.columns[4] = col;
       g.state.columns[5] = [{ id: 9099, rank: 1, suit: 'spade', faceUp: true, wild: false }];
       N.render();
       return { core: document.querySelector('#core').getBoundingClientRect().width,
-        meridians: g.state.totalMeridians };
+        runes: g.state.totalRunes };
     });
 
     const card = await page.locator('.card[data-col="5"][data-idx="0"]').boundingBox();
@@ -531,9 +531,9 @@ for (const view of VIEWS) {
       dust: document.querySelectorAll('.seal-layer .dust').length,
       onScreen: [...document.querySelectorAll('.seal-layer .card')]
         .filter((n) => n.getBoundingClientRect().top < window.innerHeight).length,
-      sealed: window.NineMeridians.game.state.totalMeridians,
+      sealed: window.Ascendant.game.state.totalRunes,
     }));
-    if (mid.sealed <= start.meridians) throw new Error('nothing sealed');
+    if (mid.sealed <= start.runes) throw new Error('nothing bound');
     if (mid.cards !== 13) throw new Error(`${mid.cards} cards drawn for a thirteen-card run`);
     if (!mid.dust) throw new Error('the cards did not come apart into dust');
     if (mid.onScreen !== 13) throw new Error(`${13 - mid.onScreen} of the run sat off screen`);
@@ -542,7 +542,7 @@ for (const view of VIEWS) {
     const done = await page.evaluate(() => ({
       layers: document.querySelectorAll('.seal-layer').length,
       core: document.querySelector('#core').getBoundingClientRect().width,
-      progress: window.NineMeridians.game.progress(),
+      progress: window.Ascendant.game.progress(),
     }));
     if (done.layers) throw new Error('the absorption left a layer behind');
     if (!(done.progress > 0)) throw new Error('progress did not move');
@@ -550,18 +550,18 @@ for (const view of VIEWS) {
     await unstash(page);
   });
 
-  await check('the Paths button lists the boons walked', async () => {
+  await check('the Boons button lists what you hold', async () => {
     await hintOff(page);
     await stash(page);
     await page.evaluate(() => {
-      const g = window.NineMeridians.game;
+      const g = window.Ascendant.game;
       g.state.boons = { talisman: 2, cell: 1 };
-      window.NineMeridians.render();
+      window.Ascendant.render();
     });
     await page.click('#btn-paths');
     await page.waitForTimeout(250);
     const text = await page.evaluate(() => document.querySelector('#overlay .panel').textContent);
-    if (!/Blank Talisman ×2/.test(text) || !/Dantian Cell ×1/.test(text)) {
+    if (!/Wildstone ×2/.test(text) || !/Vault Slot ×1/.test(text)) {
       throw new Error('the panel did not name the boons held: ' + JSON.stringify(text.slice(0, 200)));
     }
     await page.evaluate(() => document.querySelector('#overlay .big').click());
@@ -574,12 +574,12 @@ for (const view of VIEWS) {
 
   await check('the breakthrough offer fits without scrolling', async () => {
     await page.evaluate(() => {
-      const N = window.NineMeridians, g = N.game;
+      const N = window.Ascendant, g = N.game;
       const col = [];
       for (let r = 13; r >= 2; r--) col.push({ id: 9000 + r, rank: r, suit: 'spade', faceUp: true, wild: false });
       g.state.columns[0] = col;
       g.state.columns[1] = [{ id: 8999, rank: 1, suit: 'spade', faceUp: true, wild: false }];
-      g.state.required = g.state.meridians + 1;   // one sequence from a cleared board
+      g.state.required = g.state.runes + 1;   // one sequence from a cleared board
       g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
       N.render(); N.checkPhase();
     });
@@ -594,14 +594,14 @@ for (const view of VIEWS) {
     if (r.clipped) throw new Error('a choice sits outside the viewport');
     await page.locator('.boon').first().click();
     await page.waitForTimeout(300);
-    if (await page.evaluate(() => window.NineMeridians.game.state.realm) !== 2) {
+    if (await page.evaluate(() => window.Ascendant.game.state.rank) !== 2) {
       throw new Error('choosing a boon did not open the next realm');
     }
     await shot(page, `${view.tag}-realm2`);
   });
 
   await check('the end screen fits without scrolling', async () => {
-    await page.evaluate(() => { window.NineMeridians.game.concede(); window.NineMeridians.checkPhase(); });
+    await page.evaluate(() => { window.Ascendant.game.concede(); window.Ascendant.checkPhase(); });
     await page.waitForTimeout(300);
     await shot(page, `${view.tag}-end`);
     if (!(await page.locator('.tally').count())) throw new Error('no run summary shown');

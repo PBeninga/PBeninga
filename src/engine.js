@@ -3,32 +3,34 @@
 import { makeRng, shuffle, randomSeed } from './rng.js';
 import {
   SUITS, KING, SEQUENCE_LENGTH, buildDeck, runInfo, canStackOn,
-  completedMeridian, movableTail, resetCardIds, bumpCardIds,
+  completedRune, movableTail, resetCardIds, bumpCardIds,
 } from './cards.js';
 import { offerBoons } from './paths.js';
 
-export const REALMS = [
-  { name: 'Qi Condensation', hanzi: '練氣' },
-  { name: 'Foundation Establishment', hanzi: '築基' },
-  { name: 'Core Formation', hanzi: '結丹' },
-  { name: 'Nascent Soul', hanzi: '元嬰' },
-  { name: 'Spirit Severing', hanzi: '化神' },
-  { name: 'Dao Seeking', hanzi: '問道' },
+// The ladder. Each rank is a whole board cleared, and the names run from a
+// banked ember to something that no longer needs a name.
+export const RANKS = [
+  { name: 'Ember', mark: 'I' },
+  { name: 'Iron', mark: 'II' },
+  { name: 'Silver', mark: 'III' },
+  { name: 'Gold', mark: 'IV' },
+  { name: 'Radiant', mark: 'V' },
+  { name: 'Sovereign', mark: 'VI' },
 ];
-export const ASCENSION = { name: 'Immortal Ascension', hanzi: '飛昇' };
+export const TRANSCENDENCE = { name: 'Transcendence', mark: '✧' };
 
-// A realm is a whole game of solitaire: you must clear the entire tableau, not
-// just a quota of it. `startSets` is how many A-K sequences the first realm
-// deals; every realm after adds one more set to the deck, and all of them must
-// be sealed. That is what "one more sequence each time" means in practice.
+// A rank is a whole game of solitaire: you must clear the entire tableau, not
+// just a quota of it. `startSets` is how many A-K sequences the first rank
+// deals; every rank after adds one more set to the deck, and all of them must
+// be bound. That is what "one more sequence each time" means in practice.
 export const DIFFICULTIES = {
   novice: { name: 'Novice', suits: [1, 1, 1, 2, 2, 2], startSets: 3 },
   adept: { name: 'Adept', suits: [1, 1, 2, 2, 3, 4], startSets: 4 },
-  immortal: { name: 'Immortal', suits: [1, 2, 2, 4, 4, 4], startSets: 4 },
+  immortal: { name: 'Merciless', suits: [1, 2, 2, 4, 4, 4], startSets: 4 },
 };
 
 export const BASE_COLUMNS = 10;
-export const UNDOS_PER_REALM = 3;
+export const UNDOS_PER_RANK = 3;
 const MAX_UNDO_STACK = 60;
 
 export class Game {
@@ -40,22 +42,22 @@ export class Game {
     this.undoStack = [];
     this.state = {
       phase: 'play',          // play | breakthrough | ascended | failed
-      realm: 1,
+      rank: 1,
       required: 1,
-      meridians: 0,           // completed this realm
-      totalMeridians: 0,
-      collected: [],          // {suit, realm} of every meridian sealed this run
+      runes: 0,               // bound at this rank
+      totalRunes: 0,
+      collected: [],          // {suit, rank} of every rune bound this run
       columns: [],
       reserve: [],
       stock: [],
       boons: {},              // upgrade key -> how many times taken
-      undosLeft: UNDOS_PER_REALM,
+      undosLeft: UNDOS_PER_RANK,
       moves: 0,
       offer: [],
       lastSealed: [],
       log: [],
     };
-    this.dealRealm(1);
+    this.dealRank(1);
   }
 
   // ---------------------------------------------------------------- config
@@ -63,13 +65,13 @@ export class Game {
   /** How many times an upgrade has been taken. */
   held(key) { return this.state.boons[key] || 0; }
 
-  realmConfig(realm) {
+  rankConfig(rank) {
     const diff = DIFFICULTIES[this.difficulty];
-    const sets = diff.startSets + (realm - 1);
+    const sets = diff.startSets + (rank - 1);
     return {
-      required: sets,            // a realm ends when the board is clear
+      required: sets,            // a rank ends when the board is clear
       sets,
-      suitCount: Math.max(1, Math.min(SUITS.length, diff.suits[realm - 1])),
+      suitCount: Math.max(1, Math.min(SUITS.length, diff.suits[rank - 1])),
       columns: BASE_COLUMNS,
       wilds: this.held('talisman') * 2,
     };
@@ -79,9 +81,9 @@ export class Game {
 
   // ----------------------------------------------------------------- deal
 
-  dealRealm(realm) {
+  dealRank(rank) {
     const s = this.state;
-    const cfg = this.realmConfig(realm);
+    const cfg = this.rankConfig(rank);
     const deck = buildDeck(cfg, this.rng);
 
     const total = deck.length;
@@ -95,17 +97,17 @@ export class Game {
       if (col.length) col[col.length - 1].faceUp = true;
     }
 
-    s.realm = realm;
+    s.rank = rank;
     s.required = cfg.required;
-    s.meridians = 0;
+    s.runes = 0;
     s.columns = columns;
     s.stock = deck;
     s.reserve = Array.from({ length: this.reserveCells() }, () => null);
-    s.undosLeft = UNDOS_PER_REALM;
+    s.undosLeft = UNDOS_PER_RANK;
     s.phase = 'play';
     s.offer = [];
     this.undoStack = [];
-    this.log(`${REALMS[realm - 1].name}: seal ${cfg.required} meridian${cfg.required > 1 ? 's' : ''}.`);
+    this.log(`${RANKS[rank - 1].name}: bind ${cfg.required} rune${cfg.required > 1 ? 's' : ''}.`);
     this.settle();
   }
 
@@ -211,9 +213,9 @@ export class Game {
 
   /**
    * Deal one card onto every column, empty ones included. Spider forbids
-   * dealing while a column stands empty; here a realm is only over once the
-   * board is clear, so that rule would strand the stock every time a meridian
-   * sealed.
+   * dealing while a column stands empty; here a rank is only over once the
+   * board is clear, so that rule would strand the stock every time a rune
+   * was bound.
    */
   deal() {
     const s = this.state;
@@ -226,7 +228,7 @@ export class Game {
       s.columns[i].push(card);
     }
     s.moves++;
-    this.log('The heavens deal another row.');
+    this.log('Another row falls.');
     this.settle();
     return true;
   }
@@ -243,10 +245,10 @@ export class Game {
 
   // ---------------------------------------------------------- resolution
 
-  /** Flip exposed cards, seal finished meridians, then check win/loss. */
+  /** Flip exposed cards, bind finished runes, then check win/loss. */
   settle() {
     const s = this.state;
-    // What was sealed this turn, so the interface can show it leaving.
+    // What was bound this turn, so the interface can show it leaving.
     s.lastSealed = [];
     let changed = true;
     while (changed) {
@@ -257,7 +259,7 @@ export class Game {
           col[col.length - 1].faceUp = true;
           changed = true;
         }
-        const done = completedMeridian(col);
+        const done = completedRune(col);
         if (done) {
           col.length -= SEQUENCE_LENGTH;
           s.lastSealed.push({
@@ -265,29 +267,29 @@ export class Game {
             remaining: col.length,
             cards: done.cards.map((c) => ({ ...c })),
           });
-          s.meridians++;
-          s.totalMeridians++;
-          s.collected.push({ suit: done.suit || 'wild', realm: s.realm });
-          this.log(`Meridian sealed (${s.meridians}/${s.required}).`);
+          s.runes++;
+          s.totalRunes++;
+          s.collected.push({ suit: done.suit || 'wild', rank: s.rank });
+          this.log(`Rune bound (${s.runes}/${s.required}).`);
           changed = true;
         }
       }
     }
     if (s.phase !== 'play') return;
-    if (s.meridians >= s.required) {
-      if (s.realm >= REALMS.length) {
+    if (s.runes >= s.required) {
+      if (s.rank >= RANKS.length) {
         s.phase = 'ascended';
-        this.log('You step beyond the mortal coil. Ascension.');
+        this.log('The core takes the last of it. You do not come back down.');
       } else {
         s.phase = 'breakthrough';
         s.offer = offerBoons(s.boons);
-        this.log(`Breakthrough! ${REALMS[s.realm - 1].name} complete.`);
+        this.log(`${RANKS[s.rank - 1].name} cleared. Advancement.`);
       }
       return;
     }
     if (!this.hasLegalMove()) {
       s.phase = 'failed';
-      this.log('Your qi scatters. The dao is closed to you.');
+      this.log('The core goes dark. The climb ends here.');
     }
   }
 
@@ -318,7 +320,7 @@ export class Game {
   concede() {
     if (this.state.phase === 'play') {
       this.state.phase = 'failed';
-      this.log('You abandon the climb.');
+      this.log('You walk away from it.');
     }
   }
 
@@ -331,7 +333,7 @@ export class Game {
     if (!boon) return false;
     s.boons[boon.key] = (s.boons[boon.key] || 0) + 1;
     this.log(`${boon.name} ×${s.boons[boon.key]}.`);
-    this.dealRealm(s.realm + 1);
+    this.dealRank(s.rank + 1);
     return true;
   }
 
@@ -351,7 +353,7 @@ export class Game {
     const landed = dest.concat(run);
     return {
       resultRun: movableTail(landed, { mixedSuit: false }),
-      seals: completedMeridian(landed) !== null,
+      seals: completedRune(landed) !== null,
       exposes: !!(under && !under.faceUp),
       empties: !!(src && src.length === run.length),
       destEmpty: dest.length === 0,
@@ -445,7 +447,7 @@ export class Game {
   /**
    * What to suggest, in the order a player actually wants to hear it:
    *
-   *   1. moves that seal a meridian -- worth splitting a run for
+   *   1. moves that bind a rune -- worth splitting a run for
    *   2. moves that carry a whole run somewhere, never breaking one up
    *   3. failing both, moves into an empty column
    *   4. failing that, deal another row
@@ -464,22 +466,22 @@ export class Game {
     return { kind: 'over', moves: [] };
   }
 
-  /** Every sequence a full run would have to seal, across all six realms. */
+  /** Every sequence a full run would have to bind, across all six ranks. */
   totalSequences() {
     const diff = DIFFICULTIES[this.difficulty];
     let n = 0;
-    for (let r = 1; r <= REALMS.length; r++) n += diff.startSets + (r - 1);
+    for (let r = 1; r <= RANKS.length; r++) n += diff.startSets + (r - 1);
     return n;
   }
 
   /** How far through the whole climb, 0 to 1. Drives the core's growth. */
   progress() {
-    return Math.min(1, this.state.totalMeridians / this.totalSequences());
+    return Math.min(1, this.state.totalRunes / this.totalSequences());
   }
 
   score() {
     const s = this.state;
-    return s.totalMeridians * 100 + (s.realm - 1) * 250 + (s.phase === 'ascended' ? 2500 : 0);
+    return s.totalRunes * 100 + (s.rank - 1) * 250 + (s.phase === 'ascended' ? 2500 : 0);
   }
 }
 
@@ -500,7 +502,7 @@ export function serialize(game) {
 /**
  * Restore a saved run, or return null if the save cannot be trusted.
  *
- * `required` is recomputed rather than believed: what a realm demands has
+ * `required` is recomputed rather than believed: what a rank demands has
  * changed before (it used to be a quota, it is now the whole board) and a save
  * written under the old rule would otherwise resume with the old demand. The
  * recomputed value is only safe if the saved cards really are the deal this
@@ -519,7 +521,7 @@ export function deserialize(json) {
   if (!data || data.v !== 1 || !data.state) return null;
   const state = data.state;
   if (!Array.isArray(state.columns) || !Array.isArray(state.stock) || !Array.isArray(state.reserve)) return null;
-  if (!DIFFICULTIES[data.difficulty] || !REALMS[state.realm - 1]) return null;
+  if (!DIFFICULTIES[data.difficulty] || !RANKS[state.rank - 1]) return null;
 
   const game = Object.create(Game.prototype);
   game.seed = data.seed;
@@ -530,8 +532,8 @@ export function deserialize(json) {
   game.undoStack = [];
 
   const inPlay = [...state.columns.flat(), ...state.stock, ...state.reserve.filter(Boolean)];
-  const cfg = game.realmConfig(state.realm);
-  if (inPlay.length + SEQUENCE_LENGTH * state.meridians !== cfg.sets * SEQUENCE_LENGTH + cfg.wilds) {
+  const cfg = game.rankConfig(state.rank);
+  if (inPlay.length + SEQUENCE_LENGTH * state.runes !== cfg.sets * SEQUENCE_LENGTH + cfg.wilds) {
     return null;
   }
   state.required = cfg.required;

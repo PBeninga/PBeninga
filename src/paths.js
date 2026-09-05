@@ -1,44 +1,36 @@
-// The upgrades offered at a breakthrough. Both are repeatable, so every
-// breakthrough is the same question asked again: more talismans, or more room?
+// The boons offered on advancement. Both are repeatable, so every advancement
+// is the same question asked again: more wildstones, or more room?
 
 export const UPGRADES = [
   {
     key: 'talisman',
-    name: 'Blank Talisman',
-    hanzi: '靈符',
-    each: '+2 chaos talismans',
-    desc: 'Two more chaos talismans shuffled into every deal. A talisman stands '
-      + 'in for whatever rank and suit the run needs, sealed meridians included.',
+    name: 'Wildstone',
+    sigil: '✦',
+    each: '+2 wildstones',
+    desc: 'Two more wildstones cut into every deal. A wildstone answers to '
+      + 'whatever rank and suit a sequence needs, bound runes included.',
   },
   {
     key: 'cell',
-    name: 'Dantian Cell',
-    hanzi: '虛步',
-    each: '+1 reserve cell',
-    desc: 'One more reserve cell. A cell holds a single card outside the '
-      + 'tableau, for as long as you need somewhere to put it.',
+    name: 'Vault Slot',
+    sigil: '❖',
+    each: '+1 vault slot',
+    desc: 'One more slot in the vault. A slot holds a single card off the '
+      + 'board, for as long as you need it out of the way.',
   },
 ];
 
 export const UPGRADE_BY_KEY = Object.fromEntries(UPGRADES.map((u) => [u.key, u]));
 
-/** Both upgrades, every time, annotated with what you already hold. */
+/** Both boons, every time, annotated with what you already hold. */
 export function offerBoons(boons) {
   return UPGRADES.map((u) => {
     const held = boons[u.key] || 0;
-    return {
-      key: u.key,
-      name: u.name,
-      hanzi: u.hanzi,
-      each: u.each,
-      desc: u.desc,
-      held,
-      next: held + 1,
-    };
+    return { ...u, held, next: held + 1 };
   });
 }
 
-/** "靈符 Blank Talisman ×2" for each upgrade held, in a stable order. */
+/** "✦ Wildstone ×2" for each boon held, in a stable order. */
 export function boonSummary(boons) {
   return UPGRADES
     .filter((u) => boons[u.key])

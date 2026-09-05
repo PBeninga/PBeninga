@@ -3,29 +3,29 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Nine Meridians — a cultivation solitaire roguelike</title>
-<meta name="description" content="A cultivation roguelike played in Spider solitaire. Clear the board to break through a realm; every realm deals one more sequence than the last." />
+<title>Ascendant — a progression-fantasy solitaire roguelike</title>
+<meta name="description" content="A progression-fantasy roguelike played in Spider solitaire. Clear the board to advance a rank; every rank deals one more sequence than the last." />
 <link rel="stylesheet" href="src/style.css" />
 </head>
 <body>
 <div id="app">
   <header class="topbar">
-    <div class="circle" id="realm-seal" title="Realm">練氣</div>
+    <div class="circle" id="rank-mark" title="Rank">I</div>
 
     <div class="stats">
-      <div class="stat"><span class="k">Realm</span><span class="v" id="stat-realm">1/6</span></div>
-      <div class="stat"><span class="k">Meridians</span><span class="v" id="stat-meridians">0/4</span></div>
+      <div class="stat"><span class="k">Rank</span><span class="v" id="stat-rank">1/6</span></div>
+      <div class="stat"><span class="k">Runes</span><span class="v" id="stat-runes">0/4</span></div>
       <div class="stat"><span class="k">Moves</span><span class="v" id="stat-moves">0</span></div>
     </div>
 
-    <div class="circle score" id="stat-score" title="Cultivation">0</div>
+    <div class="circle score" id="stat-score" title="Power">0</div>
   </header>
 
-  <div class="realm-caption" id="realm-name">Qi Condensation</div>
+  <div class="rank-caption" id="rank-name">Ember</div>
 
   <div id="stock-row">
     <div class="tray" id="cells-wrap" hidden>
-      <span class="tray-label">Cells</span>
+      <span class="tray-label">Vault</span>
       <div class="tray" id="cells"></div>
     </div>
     <span class="row-spacer"></span>
@@ -44,7 +44,7 @@
       <span class="icon">☰</span><span class="label">Menu</span>
     </button>
     <button class="dock-btn" id="btn-paths" title="The boons you hold">
-      <span class="icon">☯</span><span class="label">Boons</span>
+      <span class="icon">❖</span><span class="label">Boons</span>
     </button>
     <button class="dock-btn primary" id="btn-deal" title="Deal one card to every column">
       <span class="icon deal-icon"></span><span class="label">Deal</span>

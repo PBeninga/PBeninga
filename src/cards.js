@@ -1,13 +1,13 @@
 // Card model and the sequence rules that drive the whole game.
 //
-// A "meridian" is what solitaire calls a completed sequence: a full K->A run
-// of one suit sitting at the foot of a column. Completing one is a cultivation
-// breakthrough; that is the only way to advance a realm.
+// A "rune" is what solitaire calls a completed sequence: a full K->A run of one
+// suit sitting at the foot of a column. Binding one is the only way to advance
+// a rank.
 
 import { shuffle } from './rng.js';
 
 export const SUITS = ['spade', 'heart', 'club', 'diamond'];
-export const SUIT_GLYPH = { spade: '♠', heart: '♥', club: '♣', diamond: '♦', wild: '☯' };
+export const SUIT_GLYPH = { spade: '♠', heart: '♥', club: '♣', diamond: '♦', wild: '✦' };
 export const SUIT_NAME = { spade: 'Shadow', heart: 'Flame', club: 'Stone', diamond: 'Frost' };
 export const RANK_LABEL = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 export const KING = 13;
@@ -25,13 +25,13 @@ export function makeWild(faceUp = false) {
 }
 
 export function cardLabel(card) {
-  if (card.wild) return '☯';
+  if (card.wild) return '✦';
   return RANK_LABEL[card.rank] + SUIT_GLYPH[card.suit];
 }
 
 /**
  * Build a deck of `sets` full A-K runs spread round-robin over the first
- * `suitCount` suits, plus `wilds` chaos talismans, shuffled.
+ * `suitCount` suits, plus `wilds` wildstones, shuffled.
  */
 export function buildDeck({ sets, suitCount, wilds = 0 }, rng) {
   const suits = SUITS.slice(0, Math.max(1, Math.min(SUITS.length, suitCount)));
@@ -101,10 +101,10 @@ export function canStackOn(runTopInfo, run, target) {
 }
 
 /**
- * Does the foot of this column hold a finished K->A meridian?
+ * Does the foot of this column hold a finished K->A rune?
  * @returns {{cards:Array, suit:string|null}|null}
  */
-export function completedMeridian(column) {
+export function completedRune(column) {
   if (column.length < SEQUENCE_LENGTH) return null;
   const tail = column.slice(column.length - SEQUENCE_LENGTH);
   const info = runInfo(tail, { sameSuit: true });
@@ -116,7 +116,7 @@ export function completedMeridian(column) {
 
 /**
  * Length of the longest movable run sitting at the foot of `column`.
- * `mixedSuit` reflects the Severed Gravity boon.
+ * `mixedSuit` is kept for rule variants; the base game never mixes suits.
  */
 export function movableTail(column, { mixedSuit = false } = {}) {
   let best = 0;

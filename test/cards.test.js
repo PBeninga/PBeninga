@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  makeCard, makeWild, runInfo, completedMeridian, movableTail, buildDeck,
+  makeCard, makeWild, runInfo, completedRune, movableTail, buildDeck,
   canStackOn, SEQUENCE_LENGTH, resetCardIds,
 } from '../src/cards.js';
 import { makeRng } from '../src/rng.js';
@@ -78,7 +78,7 @@ test('anything stacks on a wild, and a wild stacks on anything', () => {
 test('a full K-A same-suit tail is a meridian', () => {
   const col = [makeCard(5, 'heart', false)];
   for (let r = 13; r >= 1; r--) col.push(up(r, 'club'));
-  const done = completedMeridian(col);
+  const done = completedRune(col);
   assert.ok(done);
   assert.equal(done.suit, 'club');
   assert.equal(done.cards.length, SEQUENCE_LENGTH);
@@ -87,17 +87,17 @@ test('a full K-A same-suit tail is a meridian', () => {
 test('a K-A run of the wrong length or rank is not a meridian', () => {
   const short = [];
   for (let r = 12; r >= 1; r--) short.push(up(r, 'club'));
-  assert.equal(completedMeridian(short), null);
+  assert.equal(completedRune(short), null);
 
   const offset = [];
   for (let r = 12; r >= 0; r--) offset.push(up(Math.max(r, 1), 'club'));
-  assert.equal(completedMeridian(offset), null);
+  assert.equal(completedRune(offset), null);
 });
 
 test('a meridian may contain wilds', () => {
   const col = [];
   for (let r = 13; r >= 1; r--) col.push(r === 7 ? wildUp() : up(r, 'club'));
-  const done = completedMeridian(col);
+  const done = completedRune(col);
   assert.ok(done);
   assert.equal(done.suit, 'club');
 });

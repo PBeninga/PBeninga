@@ -1,7 +1,7 @@
 // Board rendering and input. Everything here talks to the engine; no rules live
 // in this file.
 
-import { Game, REALMS, ASCENSION, DIFFICULTIES, serialize, deserialize } from './engine.js';
+import { Game, RANKS, TRANSCENDENCE, DIFFICULTIES, serialize, deserialize } from './engine.js';
 import { SUIT_GLYPH, RANK_LABEL } from './cards.js';
 import { boonSummary } from './paths.js';
 import { randomSeed } from './rng.js';
@@ -10,8 +10,8 @@ import { randomSeed } from './rng.js';
 const BUILD = '__BUILD__';
 const buildTag = () => (BUILD.startsWith('__') ? 'dev' : BUILD);
 
-const SAVE_KEY = 'nine-meridians/run';
-const BEST_KEY = 'nine-meridians/best';
+const SAVE_KEY = 'ascendant/run';
+const BEST_KEY = 'ascendant/best';
 
 const $ = (sel) => document.querySelector(sel);
 // "Narrow" covers both a phone held upright and one held sideways: either way
@@ -39,7 +39,7 @@ function cardEl(card) {
   if (card.faceUp) {
     if (card.wild) {
       n.classList.add('wild');
-      n.innerHTML = '<span class="corner">☯</span><span class="center">☯</span>';
+      n.innerHTML = '<span class="corner">✦</span><span class="center">✦</span>';
     } else {
       if (card.suit === 'heart' || card.suit === 'diamond') n.classList.add('red');
       const g = SUIT_GLYPH[card.suit];
@@ -52,7 +52,7 @@ function cardEl(card) {
 
 function miniLabel(card) {
   if (!card) return '';
-  if (card.wild) return '<span style="color:var(--gold)">☯</span>';
+  if (card.wild) return '<span style="color:var(--gold)">✦</span>';
   const red = card.suit === 'heart' || card.suit === 'diamond';
   return `<span style="color:${red ? 'var(--cinnabar)' : 'var(--paper)'}">`
     + `${RANK_LABEL[card.rank]}${SUIT_GLYPH[card.suit]}</span>`;
@@ -116,13 +116,13 @@ function render() {
 
 function renderTop() {
   const s = game.state;
-  const realm = REALMS[s.realm - 1];
-  $('#realm-seal').textContent = realm.hanzi;
-  $('#realm-seal').title = `${realm.name} — realm ${s.realm} of ${REALMS.length}`;
-  $('#realm-name').textContent = realm.name;
-  $('#stat-realm').textContent = `${s.realm}/${REALMS.length}`;
-  $('#stat-meridians').textContent = `${s.meridians}/${s.required}`;
-  $('#stat-meridians').parentElement.classList.toggle('met', s.meridians >= s.required);
+  const rank = RANKS[s.rank - 1];
+  $('#rank-mark').textContent = rank.mark;
+  $('#rank-mark').title = `${rank.name} — rank ${s.rank} of ${RANKS.length}`;
+  $('#rank-name').textContent = rank.name;
+  $('#stat-rank').textContent = `${s.rank}/${RANKS.length}`;
+  $('#stat-runes').textContent = `${s.runes}/${s.required}`;
+  $('#stat-runes').parentElement.classList.toggle('met', s.runes >= s.required);
   $('#stat-moves').textContent = s.moves;
   $('#stat-score').textContent = game.score();
 
@@ -232,7 +232,7 @@ function renderDock() {
   if (hint) {
     status.appendChild(el('span', 'hint-count', hintStatusText()));
   } else if (game.isStagnant()) {
-    status.appendChild(el('span', 'warn', '⚠ No moves left — undo, or abandon the climb.'));
+    status.appendChild(el('span', 'warn', '⚠ No moves left — undo, or walk away.'));
   } else if (s.log[0]) {
     status.appendChild(el('span', '', s.log[0]));
   }
@@ -273,7 +273,7 @@ function snapshotPositions() {
 /**
  * Slide the cards from where they were to where they now are (FLIP): the board
  * has already re-rendered, so put each card back with a transform and let the
- * transition carry it home. Cards sealed into a meridian are simply gone and
+ * transition carry it home. Cards bound into a rune are simply gone and
  * have nothing to animate.
  */
 function flyFrom(before) {
@@ -447,7 +447,7 @@ function attempt(from, to, { animate = false } = {}) {
   const ok = game.move(from, to);
   if (ok) {
     const seals = game.state.lastSealed || [];
-    if (seals.length) toast(seals.length > 1 ? `${seals.length} meridians sealed` : 'Meridian sealed');
+    if (seals.length) toast(seals.length > 1 ? `${seals.length} runes bound` : 'Rune bound');
     afterAction(seals);
     if (positions) flyFrom(positions);
   }
@@ -477,7 +477,7 @@ function toast(text) {
     padding: '12px 26px', border: '1px solid var(--gold)', borderRadius: '6px',
     background: 'rgba(10,16,21,.94)', color: 'var(--gold)', zIndex: 70,
     letterSpacing: '.18em', textTransform: 'uppercase', fontSize: '13px',
-    boxShadow: '0 0 30px rgba(227,184,105,.3)', pointerEvents: 'none',
+    boxShadow: '0 0 30px rgba(232,189,106,.3)', pointerEvents: 'none',
     transition: 'opacity .5s, transform .5s',
   });
   document.body.appendChild(t);
@@ -755,19 +755,19 @@ function rulesHtml() {
         longest sequence. Drag it instead when you want a different column.</li>
         <li>An empty column accepts anything, and the stock deals one card to every column, empty ones included.</li>
       </ul>
-      <h3>Cultivation</h3>
+      <h3>Advancement</h3>
       <ul>
-        <li>A complete <b>K→A run of one suit</b> is a <b>meridian</b>. It seals itself and leaves the column.</li>
-        <li>A realm is a <b>whole game</b>: it ends when every card has been sealed away. Only then do you
-        <b>break through</b>, choose a boon, and face a fresh tableau.</li>
-        <li>Every realm deals <b>one more sequence than the last</b>, and all of them must go. The paths you
-        walk are what close that gap.</li>
-        <li>Three undos per realm. If the tableau locks up and the stock is spent, the climb ends.</li>
+        <li>A complete <b>K→A run of one suit</b> is a <b>rune</b>. It binds itself, and goes into the core.</li>
+        <li>A rank is a <b>whole board</b>: it ends when every card has gone into the core. Only then do you
+        <b>advance</b>, choose a boon, and face a fresh board.</li>
+        <li>Every rank deals <b>one more sequence than the last</b>, and all of them must go. The boons you
+        take are what close that gap.</li>
+        <li>Three undos per rank. If the board locks up and the stock is spent, the climb ends.</li>
       </ul>
-      <h3>Techniques &amp; Keys</h3>
+      <h3>Boons &amp; Keys</h3>
       <ul>
-        <li><b>Talismans</b> (☯) stand in for any rank and suit, in a stack or inside a sealed meridian.</li>
-        <li>A <b>reserve cell</b> holds one card outside the tableau. Drag a card in; tap it to send it back.</li>
+        <li><b>Wildstones</b> (✦) stand in for any rank and suit, in a stack or inside a bound rune.</li>
+        <li>A <b>vault slot</b> holds one card off the board. Drag a card in; tap it to send it back.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
         <li>Stuck? <b>Hint</b> walks every move the position offers, one a
         second, showing where each one lands — best first. Anything you do
@@ -779,8 +779,8 @@ function rulesHtml() {
 
 function pauseScreen() {
   const p = el('div', 'panel');
-  p.appendChild(el('div', 'hanzi-big', '靜坐'));
-  p.appendChild(el('h2', '', 'Meditation'));
+  p.appendChild(el('div', 'mark-big', '❖'));
+  p.appendChild(el('h2', '', 'Paused'));
   p.appendChild(el('p', '', 'The climb waits.'));
   p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b>`
     + ` · ${DIFFICULTIES[game.difficulty].name} · build ${buildTag()}`));
@@ -789,7 +789,7 @@ function pauseScreen() {
     p.appendChild(el('p', '', 'No boons yet. Clear a board to earn one.'));
   } else {
     p.appendChild(el('p', '', 'Boons held: ' + held
-      .map((u) => `<b style="color:var(--gold)">${u.hanzi} ${u.name} ×${u.count}</b>`).join(' · ')));
+      .map((u) => `<b style="color:var(--gold)">${u.sigil} ${u.name} ×${u.count}</b>`).join(' · ')));
   }
   const row = el('div');
   const resume = el('button', 'big', 'Resume');
@@ -807,23 +807,23 @@ function titleScreen() {
   const best = Number(localStorage.getItem(BEST_KEY) || 0);
   const p = el('div', 'panel');
   p.innerHTML = `
-    <div class="hanzi-big">九脈</div>
-    <h1>NINE MERIDIANS</h1>
-    <p class="lead">A cultivation roguelike played in Spider solitaire. A realm is a whole
-    game: clear every K→A sequence on the board and you break through — but the next realm
-    deals one more sequence than the last, and all of them must go.</p>
-    ${best ? `<p>Highest cultivation attained: <b style="color:var(--gold)">${best}</b></p>` : ''}
+    <div class="mark-big">✧</div>
+    <h1>ASCENDANT</h1>
+    <p class="lead">A progression-fantasy roguelike played in Spider solitaire. A rank is a
+    whole board: clear every K→A sequence and you advance — but the next rank deals one more
+    sequence than the last, and all of them must go into the core.</p>
+    ${best ? `<p>Greatest power attained: <b style="color:var(--gold)">${best}</b></p>` : ''}
     <div class="setup">
       <div class="field"><label>Seed</label><input id="seed-input" placeholder="random" /></div>
       <div class="field"><label>Difficulty</label>
         <select id="diff-input">
           <option value="novice">Novice — few suits, wide margins</option>
           <option value="adept" selected>Adept — the intended climb</option>
-          <option value="immortal">Immortal — four suits, thin decks</option>
+          <option value="immortal">Merciless — four suits, thin decks</option>
         </select>
       </div>
     </div>
-    <button class="big" id="btn-begin">Begin Cultivation</button>
+    <button class="big" id="btn-begin">Begin the Climb</button>
     <div id="resume-wrap"></div>
     ${rulesHtml()}`;
   overlay(p);
@@ -832,8 +832,8 @@ function titleScreen() {
   const restored = loadSaved();
   if (restored) {
     const wrap = $('#resume-wrap');
-    const b = el('button', '', `Resume — ${REALMS[restored.state.realm - 1].name}, `
-      + `${restored.state.meridians}/${restored.state.required} sealed`);
+    const b = el('button', '', `Resume — ${RANKS[restored.state.rank - 1].name}, `
+      + `${restored.state.runes}/${restored.state.required} bound`);
     b.style.marginTop = '12px';
     b.onclick = () => {
       game = restored;
@@ -852,18 +852,18 @@ function titleScreen() {
 
 function breakthroughScreen() {
   const s = game.state;
-  const next = REALMS[s.realm];
+  const next = RANKS[s.rank];
   const p = el('div', 'panel');
-  p.appendChild(el('div', 'hanzi-big', REALMS[s.realm - 1].hanzi));
-  p.appendChild(el('h1', '', 'BREAKTHROUGH'));
+  p.appendChild(el('div', 'mark-big', RANKS[s.rank - 1].mark));
+  p.appendChild(el('h1', '', 'ADVANCEMENT'));
   p.appendChild(el('p', 'lead',
-    `${REALMS[s.realm - 1].name} is cleared. Ahead lies <b style="color:var(--gold)">${next.name}</b>, `
-    + `a board of <b style="color:var(--gold)">${game.realmConfig(s.realm + 1).required} sequences</b>, all of which must go.`));
+    `${RANKS[s.rank - 1].name} is cleared. Ahead lies <b style="color:var(--gold)">${next.name}</b>, `
+    + `a board of <b style="color:var(--gold)">${game.rankConfig(s.rank + 1).required} sequences</b>, all of which must go.`));
   p.appendChild(el('p', '', 'Take one. It lasts the rest of the run.'));
   const offer = el('div', 'offer');
   s.offer.forEach((boon, i) => {
     const b = el('div', 'boon');
-    b.innerHTML = `<div class="hanzi">${boon.hanzi}</div>
+    b.innerHTML = `<div class="sigil">${boon.sigil}</div>
       <div class="path">${boon.each}</div>
       <div class="name">${boon.name}</div>
       <div class="desc">${boon.desc}</div>
@@ -888,11 +888,11 @@ function endScreen(won) {
   localStorage.removeItem(SAVE_KEY);
 
   const p = el('div', 'panel');
-  p.appendChild(el('div', 'hanzi-big', won ? ASCENSION.hanzi : '塵歸'));
-  p.appendChild(el('h1', '', won ? 'ASCENSION' : 'THE DAO CLOSES'));
+  p.appendChild(el('div', 'mark-big', won ? TRANSCENDENCE.mark : '✧'));
+  p.appendChild(el('h1', '', won ? 'TRANSCENDENCE' : 'THE CORE GOES DARK'));
   p.appendChild(el('p', 'lead', won
-    ? 'Six realms sealed. You step past the mortal ceiling and are not seen again.'
-    : `Your qi scattered in ${REALMS[s.realm - 1].name}. The mountain keeps its silence.`));
+    ? 'Six ranks cleared, every rune bound. Whatever you are now, it is not what started.'
+    : `You stalled at ${RANKS[s.rank - 1].name}. The core keeps what it took, and nothing more.`));
 
   const tally = el('div', 'tally');
   const stat = (n, k) => {
@@ -901,10 +901,10 @@ function endScreen(won) {
     d.appendChild(el('div', 'k', k));
     return d;
   };
-  tally.appendChild(stat(s.realm, 'Realm reached'));
-  tally.appendChild(stat(s.totalMeridians, 'Meridians sealed'));
+  tally.appendChild(stat(RANKS[s.rank - 1].name, 'Rank reached'));
+  tally.appendChild(stat(s.totalRunes, 'Runes bound'));
   tally.appendChild(stat(s.moves, 'Moves'));
-  tally.appendChild(stat(score, 'Cultivation'));
+  tally.appendChild(stat(score, 'Power'));
   p.appendChild(tally);
 
   const held = boonSummary(s.boons);
@@ -1007,7 +1007,7 @@ export function boot() {
   bindChrome();
   titleScreen();
   // Handle for the console and for browser-driven tests.
-  window.NineMeridians = {
+  window.Ascendant = {
     get game() { return game; },
     start,
     render,

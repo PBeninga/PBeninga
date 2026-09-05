@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, REALMS, BASE_COLUMNS, DIFFICULTIES, serialize, deserialize } from '../src/engine.js';
+import { Game, RANKS, BASE_COLUMNS, DIFFICULTIES, serialize, deserialize } from '../src/engine.js';
 import { makeCard, makeWild, SEQUENCE_LENGTH } from '../src/cards.js';
 
 const up = (rank, suit) => makeCard(rank, suit, true);
@@ -18,9 +18,9 @@ function rigged(columns, patch = {}) {
 
 test('a realm is a whole game: the quota is every sequence in the deck', () => {
   const g = new Game({ seed: 'ABC', difficulty: 'adept' });
-  assert.equal(g.state.realm, 1);
+  assert.equal(g.state.rank, 1);
   assert.equal(g.state.required, DIFFICULTIES.adept.startSets);
-  assert.equal(g.realmConfig(1).sets, g.state.required, 'nothing may be left on the table');
+  assert.equal(g.rankConfig(1).sets, g.state.required, 'nothing may be left on the table');
   assert.equal(g.state.phase, 'play');
   assert.equal(g.state.columns.length, BASE_COLUMNS);
 });
@@ -28,7 +28,7 @@ test('a realm is a whole game: the quota is every sequence in the deck', () => {
 test('the deal conserves every card and hides all but the foot of each column', () => {
   for (const difficulty of Object.keys(DIFFICULTIES)) {
     const g = new Game({ seed: 'DEAL', difficulty });
-    const cfg = g.realmConfig(1);
+    const cfg = g.rankConfig(1);
     const dealt = g.state.columns.flat().length + g.state.stock.length;
     assert.equal(dealt, cfg.sets * 13 + cfg.wilds, `${difficulty} card count`);
     for (const col of g.state.columns) {
@@ -85,7 +85,7 @@ test('completing K-A seals a meridian and clears the column', () => {
   for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
   const g = rigged([col, [up(1, 'club')]]);
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
-  assert.equal(g.state.totalMeridians, 1);
+  assert.equal(g.state.totalRunes, 1);
   assert.equal(g.state.columns[0].length, 1);
   assert.equal(g.state.columns[0][0].faceUp, true);
 });
@@ -97,7 +97,7 @@ test('one sequence is not a breakthrough -- the board has to be cleared', () => 
   const g = rigged([col, [up(1, 'club')], [up(9, 'spade')], [up(8, 'heart')]]);
   assert.equal(g.state.required, DIFFICULTIES.adept.startSets);
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
-  assert.equal(g.state.totalMeridians, 1);
+  assert.equal(g.state.totalRunes, 1);
   assert.equal(g.state.phase, 'play', 'no upgrade after the first K-A');
   assert.deepEqual(g.state.offer, []);
 });
@@ -118,9 +118,9 @@ test('choosing a boon opens the next realm, one sequence larger', () => {
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
   const boon = g.state.offer[0];
   g.chooseBoon(0);
-  assert.equal(g.state.realm, 2);
+  assert.equal(g.state.rank, 2);
   assert.equal(g.state.required, DIFFICULTIES.adept.startSets + 1);
-  assert.equal(g.state.meridians, 0);
+  assert.equal(g.state.runes, 0);
   assert.equal(g.state.phase, 'play');
   if (boon.type === 'path') assert.equal(g.state.boons[boon.key], boon.tier);
 });
@@ -175,10 +175,10 @@ test('stagnation is reported while a board is still live', () => {
   assert.equal(g.isStagnant(), true);
 });
 
-test('clearing the final realm ascends', () => {
+test('clearing the final rank transcends', () => {
   const col = [];
   for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
-  const g = rigged([col, [up(1, 'club')]], { realm: REALMS.length, required: 1 });
+  const g = rigged([col, [up(1, 'club')]], { rank: RANKS.length, required: 1 });
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
   assert.equal(g.state.phase, 'ascended');
   assert.ok(g.score() > 2500);
@@ -203,15 +203,15 @@ test('autoTarget prefers a same-suit landing spot', () => {
 test('a full run of every realm is reachable with the right cards', () => {
   // Drive the machine through all six realms to prove the loop closes.
   const g = new Game({ seed: 'FULL' });
-  for (let realm = 1; realm <= REALMS.length; realm += 1) {
-    assert.equal(g.state.realm, realm);
-    while (g.state.meridians < g.state.required) {
+  for (let realm = 1; realm <= RANKS.length; realm += 1) {
+    assert.equal(g.state.rank, realm);
+    while (g.state.runes < g.state.required) {
       const col = [];
       for (let r = 13; r >= 1; r--) col.push(up(r, 'club'));
       g.state.columns[0] = col;
       g.settle();
     }
-    if (realm < REALMS.length) {
+    if (realm < RANKS.length) {
       assert.equal(g.state.phase, 'breakthrough');
       g.chooseBoon(0);
     }
@@ -219,8 +219,8 @@ test('a full run of every realm is reachable with the right cards', () => {
   assert.equal(g.state.phase, 'ascended');
   const start = DIFFICULTIES.adept.startSets;
   let expected = 0;
-  for (let r = 0; r < REALMS.length; r++) expected += start + r;
-  assert.equal(g.state.totalMeridians, expected);
+  for (let r = 0; r < RANKS.length; r++) expected += start + r;
+  assert.equal(g.state.totalRunes, expected);
 });
 
 test('tapping sends a card where it builds the longest run', () => {
@@ -334,7 +334,7 @@ test('a save written under the old quota is repaired, not obeyed', () => {
   stale.state.required = 1;
   const back = deserialize(JSON.stringify(stale));
   assert.ok(back);
-  assert.equal(back.state.required, g.realmConfig(1).required);
+  assert.equal(back.state.required, g.rankConfig(1).required);
 });
 
 test('a save whose cards do not match its realm is discarded', () => {
@@ -344,21 +344,21 @@ test('a save whose cards do not match its realm is discarded', () => {
   assert.equal(deserialize(JSON.stringify(bad)), null);
 
   const wrongRealm = JSON.parse(serialize(g));
-  wrongRealm.state.realm = 4;                  // a realm-4 deck is much larger
+  wrongRealm.state.rank = 4;                  // a realm-4 deck is much larger
   assert.equal(deserialize(JSON.stringify(wrongRealm)), null);
 });
 
 test('a mid-realm save survives sealed meridians and spent stock', () => {
   const g = new Game({ seed: 'MID', difficulty: 'novice' });
-  g.state.meridians = 2;
-  g.state.totalMeridians = 2;
+  g.state.runes = 2;
+  g.state.totalRunes = 2;
   for (let n = 0; n < 2 * 13; n++) {           // stand in for two sealed runs
     if (g.state.stock.length) g.state.stock.pop();
     else g.state.columns.find((c) => c.length).pop();
   }
   const back = deserialize(serialize(g));
   assert.ok(back, 'conservation must count sealed cards, not just cards in play');
-  assert.equal(back.state.required, g.realmConfig(1).required);
+  assert.equal(back.state.required, g.rankConfig(1).required);
 });
 
 test('junk in the save slot is ignored', () => {
@@ -438,7 +438,7 @@ test('an empty column never stops the stock', () => {
 test('both upgrades are offered at every breakthrough, and both repeat', () => {
   const g = new Game({ seed: 'UPGRADE', difficulty: 'adept' });
   const reachBreakthrough = () => {
-    g.state.required = g.state.meridians + 1;
+    g.state.required = g.state.runes + 1;
     const col = [];
     for (let r = 13; r >= 1; r--) col.push(up(r, 'club'));
     g.state.columns[0] = col;
@@ -458,23 +458,23 @@ test('both upgrades are offered at every breakthrough, and both repeat', () => {
 
 test('each Blank Talisman puts two more wilds in the deal', () => {
   const g = new Game({ seed: 'WILDS', difficulty: 'adept' });
-  assert.equal(g.realmConfig(1).wilds, 0);
+  assert.equal(g.rankConfig(1).wilds, 0);
   g.state.boons = { talisman: 1 };
-  assert.equal(g.realmConfig(1).wilds, 2);
+  assert.equal(g.rankConfig(1).wilds, 2);
   g.state.boons = { talisman: 3 };
-  assert.equal(g.realmConfig(1).wilds, 6);
+  assert.equal(g.rankConfig(1).wilds, 6);
 
-  g.dealRealm(2);
+  g.dealRank(2);
   const inPlay = [...g.state.columns.flat(), ...g.state.stock];
   assert.equal(inPlay.filter((c) => c.wild).length, 6);
-  assert.equal(inPlay.length, g.realmConfig(2).sets * 13 + 6);
+  assert.equal(inPlay.length, g.rankConfig(2).sets * 13 + 6);
 });
 
 test('each Dantian Cell adds one reserve slot, and a slot holds one card', () => {
   const g = new Game({ seed: 'CELLS', difficulty: 'adept' });
   assert.equal(g.state.reserve.length, 0);
   g.state.boons = { cell: 2 };
-  g.dealRealm(2);
+  g.dealRank(2);
   assert.equal(g.state.reserve.length, 2);
   assert.ok(g.state.reserve.every((c) => c === null));
 
@@ -505,9 +505,9 @@ test('a cell that would uncover something keeps the run alive; an idle one does 
 
 test('the deck grows only by realm and talismans', () => {
   const g = new Game({ seed: 'DECK', difficulty: 'adept' });
-  assert.equal(g.realmConfig(1).columns, BASE_COLUMNS);
+  assert.equal(g.rankConfig(1).columns, BASE_COLUMNS);
   g.state.boons = { talisman: 2, cell: 5 };
-  const cfg = g.realmConfig(4);
+  const cfg = g.rankConfig(4);
   assert.equal(cfg.columns, BASE_COLUMNS, 'cells do not add columns');
   assert.equal(cfg.wilds, 4);
   assert.equal(cfg.required, cfg.sets);
@@ -540,9 +540,9 @@ test('progress runs from nothing to one across a whole climb', () => {
   const g = new Game({ seed: 'PROGRESS', difficulty: 'adept' });
   assert.equal(g.totalSequences(), 4 + 5 + 6 + 7 + 8 + 9);
   assert.equal(g.progress(), 0);
-  g.state.totalMeridians = g.totalSequences();
+  g.state.totalRunes = g.totalSequences();
   assert.equal(g.progress(), 1);
-  g.state.totalMeridians = 999;
+  g.state.totalRunes = 999;
   assert.equal(g.progress(), 1, 'and never past it');
 
   const novice = new Game({ seed: 'PROGRESS', difficulty: 'novice' });
