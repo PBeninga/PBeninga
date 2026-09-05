@@ -4,51 +4,61 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Nine Meridians — a cultivation solitaire roguelike</title>
-<meta name="description" content="A cultivation roguelike played in Spider solitaire. Seal a K-A sequence to break through a realm; every realm demands one more." />
+<meta name="description" content="A cultivation roguelike played in Spider solitaire. Clear the board to break through a realm; every realm deals one more sequence than the last." />
 <link rel="stylesheet" href="src/style.css" />
 </head>
 <body>
 <div id="app">
-  <header class="hud">
-    <div class="realm">
-      <div class="realm-seal" id="realm-seal">練氣</div>
-      <div>
-        <div class="realm-name" id="realm-name">Qi Condensation</div>
-        <div class="realm-sub" id="realm-sub">Realm 1 of 6</div>
-      </div>
+  <header class="topbar">
+    <div class="circle" id="realm-seal" title="Realm">練氣</div>
+
+    <div class="stats">
+      <div class="stat"><span class="k">Realm</span><span class="v" id="stat-realm">1/6</span></div>
+      <div class="stat"><span class="k">Meridians</span><span class="v" id="stat-meridians">0/4</span></div>
+      <div class="stat"><span class="k">Moves</span><span class="v" id="stat-moves">0</span></div>
     </div>
 
-    <div class="meridians">
-      <div class="pips" id="pips"></div>
-      <div class="meridian-label" id="meridian-label">0/1 meridians</div>
-    </div>
-
-    <div class="boon-chips" id="boon-chips"></div>
-
-    <div class="hud-right">
-      <div class="tray" id="cells-wrap" hidden>
-        <span class="tray-label">Cells</span>
-        <div class="tray" id="cells"></div>
-      </div>
-      <button id="btn-void" hidden>Void Step <span class="count">0</span></button>
-      <button id="btn-transmute" hidden>Transmute <span class="count">0</span></button>
-      <button id="btn-awaken" hidden>Awaken <span class="count">0</span></button>
-      <button id="btn-menu" title="Pause, rules and keys">☰ Menu</button>
-    </div>
+    <div class="circle score" id="stat-score" title="Cultivation">0</div>
   </header>
 
+  <div class="realm-caption" id="realm-name">Qi Condensation</div>
+
   <div id="stock-row">
+    <div class="tray" id="cells-wrap" hidden>
+      <span class="tray-label">Cells</span>
+      <div class="tray" id="cells"></div>
+    </div>
+    <button id="btn-void" hidden>Void Step <span class="count">0</span></button>
+    <button id="btn-transmute" hidden>Transmute <span class="count">0</span></button>
+    <button id="btn-awaken" hidden>Awaken <span class="count">0</span></button>
+    <span class="row-spacer"></span>
+    <span class="stock-count"></span>
     <div class="stock-fan" id="stock" title="Deal one card to every column"></div>
   </div>
 
   <main id="board"></main>
 
+  <div id="status"></div>
+
   <footer id="dock">
-    <button id="btn-hint" title="Cycle through every move available">✦ Hint</button>
-    <button id="btn-undo" title="Take back the last move">↺ Undo <span class="count">3</span></button>
-    <span id="status"></span>
-    <span id="seed-tag"></span>
+    <button class="dock-btn" id="btn-menu" title="Pause, rules and keys">
+      <span class="icon">☰</span><span class="label">Menu</span>
+    </button>
+    <button class="dock-btn" id="btn-paths" title="The paths you have walked">
+      <span class="icon">☯</span><span class="label">Paths</span>
+    </button>
+    <button class="dock-btn primary" id="btn-deal" title="Deal one card to every column">
+      <span class="icon deal-icon"></span><span class="label">Deal</span>
+    </button>
+    <button class="dock-btn" id="btn-hint" title="Cycle through the moves worth making">
+      <span class="icon">✦</span><span class="label">Hint</span>
+    </button>
+    <button class="dock-btn" id="btn-undo" title="Take back the last move">
+      <span class="icon">↺</span><span class="label">Undo <b class="count">3</b></span>
+    </button>
   </footer>
+
+  <span id="seed-tag"></span>
 </div>
 
 <div id="overlay" hidden></div>

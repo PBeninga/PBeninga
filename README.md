@@ -68,8 +68,16 @@ Standard Spider, with two additions.
 
 ## Playing
 
+The screen is laid out the way a solitaire app is: a stat row at the top
+(realm seal, **Realm / Meridians / Moves**, cultivation score), the stock band
+beneath it holding your techniques on the left and the deal fan on the right,
+the tableau, and a toolbar of **Menu · Paths · Deal · Hint · Undo** across the
+bottom. The status line floats just above the toolbar and costs no board
+height when it has nothing to say.
+
 **Tap a card and it goes** — it slides to its new column over half a second
-rather than teleporting. A tap plays it straight to whichever column builds
+rather than teleporting. **Dealing** throws the new row out of the stock one
+card at a time, about 40ms apart, so you can see where it lands. A tap plays it straight to whichever column builds
 the longest sequence — the same ranking the hint carousel uses, so a tap is
 always the move a hint would recommend for that card. Drag instead when you
 want a say in the destination, or to park a card in a reserve cell.
@@ -143,9 +151,10 @@ built around it rather than against it.
   no pick-up-then-place, no double-tap, nothing to mis-aim. A cancelled gesture
   (an incoming call, a system swipe) puts the cards back rather than leaving
   them floating.
-- The HUD collapses to two short rows; boons fold into one chip that opens the
-  full list. The stock fan sits in its own band above the tableau, right-aligned,
-  and shrinks with the screen. Hint and Undo sit in a bottom dock under the thumbs, and every
+- Everything shrinks by breakpoint rather than reflowing: the stat row, the
+  stock fan and the toolbar all have phone and landscape-phone sizes. The
+  toolbar keeps 46px targets in portrait and drops to 36px in landscape, where
+  height is the scarce thing. Hint and Undo sit in a bottom dock under the thumbs, and every
   control stays at least 40px tall.
 - Landscape gets nearly double the card size and a single-line HUD.
 - Overlays are laid out three ways — full cards on desktop, compact rows in

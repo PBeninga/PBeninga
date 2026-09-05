@@ -110,48 +110,23 @@ function offsetsFor(columns, h, boardH, compact) {
 
 function render() {
   if (!game) return;
-  renderHud();
+  renderTop();
   renderBoard();
   renderDock();
   save();
 }
 
-function renderHud() {
+function renderTop() {
   const s = game.state;
   const realm = REALMS[s.realm - 1];
   $('#realm-seal').textContent = realm.hanzi;
+  $('#realm-seal').title = `${realm.name} — realm ${s.realm} of ${REALMS.length}`;
   $('#realm-name').textContent = realm.name;
-  $('#realm-sub').textContent = `Realm ${s.realm} of ${REALMS.length}`;
-
-  const pips = $('#pips');
-  pips.innerHTML = '';
-  // Nine pips crowd a phone; the count beside them says the same thing.
-  if (!isNarrow()) {
-    for (let i = 0; i < s.required; i++) {
-      pips.appendChild(el('div', 'pip' + (i < s.meridians ? ' on' : '')));
-    }
-  }
-  $('#meridian-label').textContent = `${s.meridians}/${s.required} meridians`;
-
-  const chips = $('#boon-chips');
-  chips.innerHTML = '';
-  const taken = Object.entries(s.boons);
-  // On a phone a row of full boon names costs more screen than it is worth;
-  // collapse to a tap that opens the same list in the pause panel.
-  if (isNarrow() && taken.length + (s.fortune ? 1 : 0) > 1) {
-    const chip = el('span', 'chip', `☯ <b>${taken.length + (s.fortune ? 1 : 0)} boons</b>`);
-    chip.style.cursor = 'pointer';
-    chip.onclick = pauseScreen;
-    chips.appendChild(chip);
-  } else {
-    for (const [key, tier] of taken) {
-      const path = PATH_BY_KEY[key];
-      chips.appendChild(el('span', 'chip', `${path.hanzi} <b>${path.tiers[tier - 1].name}</b>`));
-    }
-    if (s.fortune) chips.appendChild(el('span', 'chip', `天緣 <b>Fortune ×${s.fortune}</b>`));
-  }
-
-  renderStock();
+  $('#stat-realm').textContent = `${s.realm}/${REALMS.length}`;
+  $('#stat-meridians').textContent = `${s.meridians}/${s.required}`;
+  $('#stat-meridians').parentElement.classList.toggle('met', s.meridians >= s.required);
+  $('#stat-moves').textContent = s.moves;
+  $('#stat-score').textContent = game.score();
 
   const cells = $('#cells');
   cells.innerHTML = '';
@@ -169,12 +144,9 @@ function renderHud() {
   chargeButton('#btn-void', 'void', s.charges.voidStep, 'Void Step');
   chargeButton('#btn-transmute', 'transmute', s.charges.transmute, 'Transmute');
   chargeButton('#btn-awaken', 'awaken', s.charges.awaken, 'Awaken');
+  renderStock();
 }
 
-/**
- * One card back per remaining deal. The fan is the count: how many rows the
- * heavens still owe you is something you read off the board, not a number.
- */
 function renderStock() {
   const s = game.state;
   const fan = $('#stock');
@@ -259,20 +231,19 @@ function renderDock() {
     status.appendChild(el('span', 'hint-count', hintStatusText()));
   } else if (game.isStagnant()) {
     status.appendChild(el('span', 'warn', '⚠ No moves left — undo, spend a technique, or abandon the climb.'));
-  } else {
-    status.appendChild(el('span', '', s.log[0] || ''));
+  } else if (s.log[0]) {
+    status.appendChild(el('span', '', s.log[0]));
   }
   $('#seed-tag').textContent = `${game.seed} · ${DIFFICULTIES[game.difficulty].name} · ${buildTag()}`;
 
   const undo = $('#btn-undo');
   undo.disabled = s.undosLeft <= 0 || !game.undoStack.length;
-  undo.innerHTML = `↺ Undo <span class="count">${s.undosLeft}</span>`;
-  const hintBtn = $('#btn-hint');
-  hintBtn.disabled = s.phase !== 'play';
-  hintBtn.classList.toggle('armed', !!hint);
+  undo.querySelector('.label').innerHTML = `Undo <b class="count">${s.undosLeft}</b>`;
+  $('#btn-hint').disabled = s.phase !== 'play';
+  $('#btn-hint').classList.toggle('armed', !!hint);
+  $('#btn-deal').disabled = !game.canDeal();
+  $('#btn-deal').classList.toggle('armed', !!hint && hint.kind === 'deal');
 }
-
-// ------------------------------------------------------------- highlights
 
 function markTargets(run, on) {
   document.querySelectorAll('.col').forEach((colEl) => {
@@ -335,6 +306,47 @@ function flyFrom(before) {
  * player put it, so sliding it would mean snapping it back to its old column
  * first and crossing the board a second time.
  */
+const DEAL_STAGGER_MS = 38;
+const DEAL_FLIGHT_MS = 240;
+
+/**
+ * Send the new row out of the stock one card at a time. The cards are already
+ * where they belong; each is thrown back onto the fan and released a beat
+ * after the one before it.
+ */
+function dealAnimation(before) {
+  const fan = $('#stock').getBoundingClientRect();
+  const fresh = [...document.querySelectorAll('#board .card')].filter((n) => !before.has(n.dataset.id));
+  if (!fresh.length) return;
+  fresh.forEach((n, i) => {
+    const r = n.getBoundingClientRect();
+    n.style.transform = `translate(${fan.left - r.left}px, ${fan.top - r.top}px) scale(.55)`;
+    n.style.opacity = '0';
+    n.style.transitionDelay = `${i * DEAL_STAGGER_MS}ms`;
+  });
+  void document.body.offsetHeight;
+  for (const n of fresh) {
+    n.classList.add('dealing');
+    n.style.transform = '';
+    n.style.opacity = '';
+  }
+  setTimeout(() => {
+    for (const n of fresh) {
+      n.classList.remove('dealing');
+      n.style.transitionDelay = '';
+    }
+  }, fresh.length * DEAL_STAGGER_MS + DEAL_FLIGHT_MS + 60);
+}
+
+function doDeal() {
+  if (!game || !game.canDeal()) return false;
+  const before = new Set([...document.querySelectorAll('#board .card')].map((n) => n.dataset.id));
+  if (!game.deal()) return false;
+  afterAction();
+  dealAnimation(before);
+  return true;
+}
+
 function attempt(from, to, { animate = false } = {}) {
   const force = armed === 'void';
   const before = game.state.totalMeridians;
@@ -402,7 +414,7 @@ function startHint() {
   if (!game || game.state.phase !== 'play') return;
   const s = game.suggest();
   hint = { kind: s.kind, moves: s.moves, index: 0, timers: [], layer: null };
-  renderHud();
+  renderTop();
   renderDock();
   if (!hint.moves.length) {
     // Nothing to draw a ghost for: the advice is the stock pile, or nothing.
@@ -706,6 +718,9 @@ function pauseScreen() {
   p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b>`
     + ` · ${DIFFICULTIES[game.difficulty].name} · build ${buildTag()}`));
   const taken = Object.entries(game.state.boons);
+  if (!taken.length && !game.state.fortune) {
+    p.appendChild(el('p', '', 'You have walked no path yet. Clear a board to choose one.'));
+  }
   if (taken.length || game.state.fortune) {
     const list = taken
       .map(([k, t]) => `<b style="color:var(--gold)">${PATH_BY_KEY[k].hanzi} ${PATH_BY_KEY[k].tiers[t - 1].name}</b>`)
@@ -888,9 +903,9 @@ function start(seed, difficulty) {
 }
 
 function bindChrome() {
-  $('#stock').addEventListener('click', () => {
-    if (game && game.deal()) afterAction();
-  });
+  $('#stock').addEventListener('click', doDeal);
+  $('#btn-deal').addEventListener('click', doDeal);
+  $('#btn-paths').addEventListener('click', () => { stopHint(); pauseScreen(); });
   $('#btn-undo').addEventListener('click', () => {
     if (game && game.undo()) { armed = null; afterAction(); }
   });
@@ -923,7 +938,7 @@ function bindChrome() {
       e.preventDefault();
       if (game.undo()) afterAction();
     }
-    if (e.key === ' ' || e.key === 'd') { e.preventDefault(); if (game.deal()) afterAction(); }
+    if (e.key === ' ' || e.key === 'd') { e.preventDefault(); doDeal(); }
   });
 }
 

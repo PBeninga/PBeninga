@@ -194,6 +194,32 @@ for (const view of VIEWS) {
     if (m.cardW < 30) throw new Error('cards shrank below 30px: ' + m.cardW);
   });
 
+  await check('a dealt row flies out of the stock, one card after another', async () => {
+    const r = await page.evaluate(async () => {
+      const before = document.querySelectorAll('#board .card').length;
+      document.querySelector('#btn-deal').click();
+      await new Promise((res) => setTimeout(res, 30));
+      const flying = [...document.querySelectorAll('#board .card.dealing')];
+      return {
+        before,
+        after: document.querySelectorAll('#board .card').length,
+        flying: flying.length,
+        delays: [...new Set(flying.map((n) => n.style.transitionDelay))].length,
+        offset: flying.filter((n) => n.style.transform || getComputedStyle(n).transform !== 'none').length,
+      };
+    });
+    if (r.after <= r.before) throw new Error('nothing was dealt');
+    if (!r.flying) throw new Error('the dealt cards did not animate');
+    if (r.flying !== r.after - r.before) throw new Error('only some of the row animated');
+    if (r.delays < 2) throw new Error('every card left at once, with no stagger');
+    await page.waitForTimeout(900);
+    const done = await page.evaluate(() => ({
+      stuck: document.querySelectorAll('#board .card.dealing').length,
+      inline: [...document.querySelectorAll('#board .card')].filter((n) => n.style.transform || n.style.transitionDelay).length,
+    }));
+    if (done.stuck || done.inline) throw new Error('the animation left state behind: ' + JSON.stringify(done));
+  });
+
   await check('drag and drop moves a card', async () => {
     const p = await findMove(page);
     if (!p) throw new Error('this deal offered no legal move');
@@ -387,7 +413,8 @@ for (const view of VIEWS) {
 
   if (view.touch) {
     await check('controls are big enough to tap', async () => {
-      const small = await page.evaluate(() => [...document.querySelectorAll('#stock, .hud button:not([hidden]), #dock button')]
+      const small = await page.evaluate(() => [...document.querySelectorAll(
+        '#stock, .topbar button, #stock-row button:not([hidden]), .dock-btn')]
         .map((n) => ({ id: n.id || n.className, h: Math.round(n.getBoundingClientRect().height) }))
         .filter((n) => n.h < 32));
       if (small.length) throw new Error('under 32px tall: ' + JSON.stringify(small));
@@ -479,6 +506,28 @@ for (const view of VIEWS) {
     if (r.wrong.length) throw new Error('wrong dim state on ' + JSON.stringify(r.wrong.slice(0, 3)));
     if (!r.dimmed) throw new Error('no buried card was dimmed after a deal');
     if (r.filter === 'none') throw new Error('the dim class has no visual effect');
+  });
+
+  await check('the Paths button lists the boons walked', async () => {
+    await hintOff(page);
+    await stash(page);
+    await page.evaluate(() => {
+      const g = window.NineMeridians.game;
+      g.state.boons = { void: 2, talisman: 1 };
+      window.NineMeridians.render();
+    });
+    await page.click('#btn-paths');
+    await page.waitForTimeout(250);
+    const text = await page.evaluate(() => document.querySelector('#overlay .panel').textContent);
+    if (!/Void Step/.test(text) || !/Blank Talisman/.test(text)) {
+      throw new Error('the panel did not name the boons held');
+    }
+    await page.evaluate(() => document.querySelector('#overlay .big').click());
+    await page.waitForTimeout(200);
+    if (!(await page.evaluate(() => document.querySelector('#overlay').hidden))) {
+      throw new Error('resume did not close the panel');
+    }
+    await unstash(page);
   });
 
   await check('the breakthrough offer fits without scrolling', async () => {
