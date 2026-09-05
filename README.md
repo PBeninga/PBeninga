@@ -163,10 +163,15 @@ lookahead, random boon choices, never touches reserve cells or charges), over
 | | clears realm 1 | avg realm reached | ascended |
 |---|---|---|---|
 | Novice | 35% | 1.5 | 0/60 |
+| Adept | 43% | 1.5 | 0/60 |
+| Immortal | 43% | 1.5 | 0/60 |
 
-Adept and Immortal were mid-measurement when the upgrade rewrite landed; the
-figures above them are from the four-path build and no longer describe this
-one.
+Cutting twelve boons down to two barely moved these, which is the least
+interesting result possible and worth saying plainly: the bot picks randomly
+and never touches a reserve cell, so it was never using the boons it lost.
+Adept and Immortal also sit on top of each other, though the suit ramp is
+supposed to separate them — runs end before the extra suits arrive. Both are
+arguments that the numbers describe the bot more than the game.
 
 (Measured after the stock stopped being blocked by empty columns, which lifted
 every figure a little.) The bot is much weaker than a person — a one-suit board
