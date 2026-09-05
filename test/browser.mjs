@@ -394,13 +394,45 @@ for (const view of VIEWS) {
     });
   }
 
-  await check('the stock deals a row', async () => {
-    const before = await page.evaluate(() => window.NineMeridians.game.state.stock.length);
-    await page.click('#stock');
-    await page.waitForTimeout(220);
-    if (await page.evaluate(() => window.NineMeridians.game.state.stock.length) >= before) {
-      throw new Error('the stock did not deal');
+  await check('the stock shows one card back per remaining deal', async () => {
+    const read = () => page.evaluate(() => ({
+      backs: document.querySelectorAll('#stock .stock-card:not(.empty)').length,
+      deals: window.NineMeridians.game.dealsLeft(),
+      cards: window.NineMeridians.game.state.stock.length,
+      label: document.querySelector('.stock-count').textContent,
+    }));
+    const before = await read();
+    if (!before.deals) throw new Error('no stock left to check');
+    if (before.backs !== before.deals) {
+      throw new Error(`${before.backs} backs drawn for ${before.deals} deals`);
     }
+    if (!before.label.includes(String(before.deals))) throw new Error('label read "' + before.label + '"');
+
+    await page.click('#stock');
+    await page.waitForTimeout(250);
+    const after = await read();
+    if (after.cards >= before.cards) throw new Error('the stock did not deal');
+    if (after.backs !== after.deals) throw new Error('the fan did not follow the deal');
+    if (after.deals !== before.deals - 1) throw new Error('a deal did not come off the fan');
+  });
+
+  await check('a spent stock says so', async () => {
+    await stash(page);
+    await page.evaluate(() => {
+      window.NineMeridians.game.state.stock = [];
+      window.NineMeridians.render();
+    });
+    await page.waitForTimeout(150);
+    const r = await page.evaluate(() => ({
+      backs: document.querySelectorAll('#stock .stock-card:not(.empty)').length,
+      placeholder: document.querySelectorAll('#stock .stock-card.empty').length,
+      label: document.querySelector('.stock-count').textContent,
+      spent: document.querySelector('#stock').classList.contains('spent'),
+    }));
+    if (r.backs) throw new Error('backs still drawn for an empty stock');
+    if (!r.placeholder) throw new Error('no empty-slot placeholder');
+    if (!r.spent || !/spent/i.test(r.label)) throw new Error('spent state not shown: ' + JSON.stringify(r));
+    await unstash(page);
   });
 
   await check('a live run resumes exactly where it left off', async () => {

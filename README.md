@@ -55,7 +55,9 @@ Standard Spider, with two additions.
 - Build **down by rank** onto any card; suit is irrelevant while stacking.
 - Lift a group only when it is a **descending run of a single suit**.
 - Empty columns accept anything, and the stock deals one card to every column,
-  empty ones included. Spider forbids dealing while a column stands empty; that
+  empty ones included. The stock is drawn as **one card back per remaining
+  deal**, so how many rows are still to come is something you read off the
+  board rather than count. Spider forbids dealing while a column stands empty; that
   rule is dropped here, because a realm only ends once the board is clear, so
   every meridian you seal would otherwise strand the stock.
 - A **K→A run of one suit** at the foot of a column seals itself as a meridian
@@ -142,7 +144,8 @@ built around it rather than against it.
   (an incoming call, a system swipe) puts the cards back rather than leaving
   them floating.
 - The HUD collapses to two short rows; boons fold into one chip that opens the
-  full list. Hint and Undo sit in a bottom dock under the thumbs, and every
+  full list. The stock fan sits in its own band above the tableau, right-aligned,
+  and shrinks with the screen. Hint and Undo sit in a bottom dock under the thumbs, and every
   control stays at least 40px tall.
 - Landscape gets nearly double the card size and a single-line HUD.
 - Overlays are laid out three ways — full cards on desktop, compact rows in
@@ -182,6 +185,7 @@ lookahead, random boon choices, never touches reserve cells or charges), over
 |---|---|---|---|
 | Novice | 35% | 1.5 | 0/60 |
 | Adept | 43% | 1.6 | 0/60 |
+| Immortal | 43% | 1.6 | 0/60 |
 
 (Measured after the stock stopped being blocked by empty columns, which lifted
 every figure a little.) The bot is much weaker than a person — a one-suit board

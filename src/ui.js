@@ -151,12 +151,7 @@ function renderHud() {
     if (s.fortune) chips.appendChild(el('span', 'chip', `天緣 <b>Fortune ×${s.fortune}</b>`));
   }
 
-  const stock = $('#stock');
-  stock.textContent = s.stock.length;
-  stock.classList.toggle('spent', s.stock.length === 0);
-  stock.classList.toggle('blocked', false);
-  stock.title = game.dealBlockedReason() || 'Deal one card to every column.';
-  stock.classList.toggle('hint-deal', !!hint && hint.kind === 'deal');
+  renderStock();
 
   const cells = $('#cells');
   cells.innerHTML = '';
@@ -174,6 +169,36 @@ function renderHud() {
   chargeButton('#btn-void', 'void', s.charges.voidStep, 'Void Step');
   chargeButton('#btn-transmute', 'transmute', s.charges.transmute, 'Transmute');
   chargeButton('#btn-awaken', 'awaken', s.charges.awaken, 'Awaken');
+}
+
+/**
+ * One card back per remaining deal. The fan is the count: how many rows the
+ * heavens still owe you is something you read off the board, not a number.
+ */
+function renderStock() {
+  const s = game.state;
+  const fan = $('#stock');
+  const row = $('#stock-row');
+  const deals = game.dealsLeft();
+  fan.innerHTML = '';
+  fan.classList.toggle('spent', deals === 0);
+  fan.classList.toggle('hint-deal', !!hint && hint.kind === 'deal');
+
+  if (deals === 0) {
+    fan.appendChild(el('div', 'stock-card empty'));
+  } else {
+    for (let i = 0; i < deals; i++) fan.appendChild(el('div', 'stock-card'));
+  }
+  fan.title = deals
+    ? `${deals} deal${deals > 1 ? 's' : ''} left — ${s.stock.length} cards`
+    : 'The stock is spent.';
+
+  let count = row.querySelector('.stock-count');
+  if (!count) {
+    count = el('span', 'stock-count');
+    row.insertBefore(count, fan);
+  }
+  count.textContent = deals ? `${deals} deal${deals > 1 ? 's' : ''} left` : 'stock spent';
 }
 
 function chargeButton(sel, mode, count, label) {

@@ -275,6 +275,12 @@ export class Game {
     return this.state.phase === 'play' && this.state.stock.length > 0;
   }
 
+  /** How many more rows the stock can deal -- the last one may be partial. */
+  dealsLeft() {
+    const targets = this.dealTargets().length;
+    return targets ? Math.ceil(this.state.stock.length / targets) : 0;
+  }
+
   // ------------------------------------------------------------- charges
 
   transmute(ref, suit) {
