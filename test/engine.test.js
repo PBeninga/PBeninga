@@ -69,16 +69,6 @@ test('only a same-suit run may be lifted as a group', () => {
   assert.equal(g.move({ zone: 'col', index: 0, count: 2 }, { zone: 'col', index: 1 }), false);
 });
 
-test('Severed Gravity lifts mixed-suit runs', () => {
-  const g = rigged([
-    [up(9, 'club'), up(8, 'heart')],
-    [up(10, 'spade')],
-  ], { boons: { void: 3 } });
-  assert.equal(g.canGrab(0, 2), true);
-  assert.equal(g.move({ zone: 'col', index: 0, count: 2 }, { zone: 'col', index: 1 }), true);
-  assert.equal(g.state.columns[1].length, 3);
-});
-
 test('moving a whole column into an empty one is refused', () => {
   const g = rigged([[up(9, 'spade')], []]);
   assert.equal(g.move({ zone: 'col', index: 0, count: 1 }, { zone: 'col', index: 1 }), false);
@@ -112,14 +102,13 @@ test('one sequence is not a breakthrough -- the board has to be cleared', () => 
   assert.deepEqual(g.state.offer, []);
 });
 
-test('clearing the last sequence triggers a breakthrough with three boons', () => {
+test('clearing the last sequence triggers a breakthrough', () => {
   const col = [];
   for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
   const g = rigged([col, [up(1, 'club')]], { required: 1 });
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
   assert.equal(g.state.phase, 'breakthrough');
-  assert.equal(g.state.offer.length, 3);
-  assert.equal(new Set(g.state.offer.map((o) => o.key)).size, 3);
+  assert.deepEqual(g.state.offer.map((o) => o.key), ['talisman', 'cell']);
 });
 
 test('choosing a boon opens the next realm, one sequence larger', () => {
@@ -136,28 +125,6 @@ test('choosing a boon opens the next realm, one sequence larger', () => {
   if (boon.type === 'path') assert.equal(g.state.boons[boon.key], boon.tier);
 });
 
-test('each path tier changes the next deal', () => {
-  const g = new Game({ seed: 'BOON', difficulty: 'adept' });
-  g.state.boons = { expansion: 3, talisman: 2, severance: 1, void: 3 };
-  g.state.realm = 4;
-  const cfg = g.realmConfig(5);
-  assert.equal(cfg.columns, BASE_COLUMNS + 3);
-  assert.equal(cfg.wilds, 4);
-  assert.equal(cfg.suitCount, DIFFICULTIES.adept.suits[4] - 1);
-  g.dealRealm(5);
-  assert.equal(g.state.columns.length, BASE_COLUMNS + 3);
-  assert.equal(g.state.reserve.length, 2);
-  assert.equal(g.state.charges.voidStep, 4);
-  assert.ok(g.state.columns.flat().concat(g.state.stock).filter((c) => c.wild).every((c) => c.faceUp));
-});
-
-test('Wide Channels leaves one column empty at the deal', () => {
-  const g = new Game({ seed: 'WIDE', difficulty: 'adept' });
-  g.state.boons = { expansion: 2 };
-  g.dealRealm(2);
-  assert.equal(g.state.columns.filter((c) => c.length === 0).length, 1);
-});
-
 test('the stock deals one card per column, empty ones included', () => {
   const g = new Game({ seed: 'STOCK' });
   const before = g.state.stock.length;
@@ -172,28 +139,6 @@ test('the stock deals one card per column, empty ones included', () => {
   assert.equal(g.state.columns[3].length, 1, 'the empty column was dealt into');
 });
 
-test('Boundless Field keeps empty columns empty through a deal', () => {
-  const g = new Game({ seed: 'FIELD' });
-  g.state.boons = { expansion: 3 };
-  g.state.columns[2] = [];
-  g.state.columns[6] = [];
-  const before = g.state.stock.length;
-  assert.deepEqual(g.dealTargets().includes(2), false);
-  assert.equal(g.deal(), true);
-  assert.equal(g.state.columns[2].length, 0);
-  assert.equal(g.state.columns[6].length, 0);
-  assert.equal(g.state.stock.length, before - (g.state.columns.length - 2));
-});
-
-test('a board of nothing but empty columns is still dealt into', () => {
-  const g = new Game({ seed: 'ALLEMPTY' });
-  g.state.boons = { expansion: 3 };
-  g.state.columns = g.state.columns.map(() => []);
-  assert.equal(g.dealTargets().length, g.state.columns.length);
-  assert.equal(g.deal(), true);
-  assert.ok(g.state.columns.every((c) => c.length === 1));
-});
-
 test('reserve cells hold exactly one card and give it back', () => {
   const g = rigged([[up(4, 'heart'), up(7, 'spade')], [up(8, 'club')]], { reserve: [null] });
   assert.equal(g.move({ zone: 'col', index: 0, count: 1 }, { zone: 'reserve', index: 0 }), true);
@@ -202,34 +147,6 @@ test('reserve cells hold exactly one card and give it back', () => {
   assert.equal(g.move({ zone: 'reserve', index: 0 }, { zone: 'col', index: 1 }), true);
   assert.equal(g.state.reserve[0], null);
   assert.equal(g.state.columns[1].length, 2);
-});
-
-test('a void step forces an illegal placement and spends a charge', () => {
-  const g = rigged([[up(9, 'spade')], [up(3, 'heart')]], { charges: { voidStep: 1, transmute: 0, awaken: 0 } });
-  const from = { zone: 'col', index: 1, count: 1 };
-  const to = { zone: 'col', index: 0 };
-  assert.equal(g.move(from, to), false);
-  assert.equal(g.move(from, to, { force: true }), true);
-  assert.equal(g.state.charges.voidStep, 0);
-  assert.equal(g.move({ zone: 'col', index: 0, count: 1 }, { zone: 'col', index: 1 }, { force: true }), false);
-});
-
-test('transmutation changes a suit and can finish a meridian', () => {
-  const col = [];
-  for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
-  col.push(up(1, 'heart'));
-  const g = rigged([col], { charges: { voidStep: 0, transmute: 1, awaken: 0 } });
-  assert.equal(g.state.totalMeridians, 0);
-  assert.equal(g.transmute({ zone: 'col', index: 0, cardIndex: 12 }, 'club'), true);
-  assert.equal(g.state.totalMeridians, 1);
-  assert.equal(g.state.charges.transmute, 0);
-});
-
-test('awakening turns a card into a talisman', () => {
-  const g = rigged([[up(5, 'heart')]], { charges: { voidStep: 0, transmute: 0, awaken: 1 } });
-  assert.equal(g.awaken({ zone: 'col', index: 0 }), true);
-  assert.equal(g.state.columns[0][0].wild, true);
-  assert.equal(g.awaken({ zone: 'col', index: 0 }), false);
 });
 
 test('undo restores the board and is limited per realm', () => {
@@ -304,14 +221,6 @@ test('a full run of every realm is reachable with the right cards', () => {
   let expected = 0;
   for (let r = 0; r < REALMS.length; r++) expected += start + r;
   assert.equal(g.state.totalMeridians, expected);
-});
-
-test('Fortune is the only way to leave a sequence behind', () => {
-  const g = new Game({ seed: 'FORTUNE', difficulty: 'adept' });
-  const full = g.realmConfig(2).required;
-  g.state.fortune = 1;
-  assert.equal(g.realmConfig(2).required, full - 1);
-  assert.equal(g.realmConfig(2).sets, full, 'the deck is unchanged; the demand is not');
 });
 
 test('tapping sends a card where it builds the longest run', () => {
@@ -402,7 +311,6 @@ test('listMoves includes reserve cells and is empty once the run ends', () => {
   g.state.phase = 'failed';
   assert.deepEqual(g.listMoves(), []);
 });
-
 
 test('a saved run round-trips', () => {
   const g = new Game({ seed: 'SAVE', difficulty: 'adept' });
@@ -514,28 +422,6 @@ test('no moves, no empty column and no stock ends the run', () => {
   assert.equal(g.state.phase, 'failed');
 });
 
-test('a charged technique or a useful cell keeps the run alive', () => {
-  const dead = () => rigged([[up(4, 'spade'), up(7, 'club')], [up(2, 'heart')]]);
-
-  const withCharge = dead();
-  withCharge.state.charges.voidStep = 1;
-  assert.equal(withCharge.hasLegalMove(), true);
-
-  // A cell that would uncover a face-down card is a way out...
-  const withCell = rigged([[makeCard(4, 'spade', false), up(7, 'club')], [up(2, 'heart')]], { reserve: [null] });
-  assert.equal(withCell.hasLegalMove(), true);
-
-  // ...but one that only shuffles a fully exposed card around is not. Every
-  // column here is two face-up cards, so parking uncovers nothing and empties
-  // nothing.
-  const idleCell = rigged(
-    [[up(4, 'spade'), up(7, 'club')], [up(2, 'heart'), up(9, 'diamond')]],
-    { reserve: [null] },
-  );
-  assert.equal(idleCell.suggest().kind, 'over');
-  assert.equal(idleCell.hasLegalMove(), false);
-});
-
 test('an empty column never stops the stock', () => {
   const g = new Game({ seed: 'BLOCK', difficulty: 'adept' });
   assert.equal(g.dealBlockedReason(), null);
@@ -546,4 +432,83 @@ test('an empty column never stops the stock', () => {
   g.state.stock = [];
   assert.equal(g.canDeal(), false);
   assert.match(g.dealBlockedReason(), /spent/);
+});
+
+
+test('both upgrades are offered at every breakthrough, and both repeat', () => {
+  const g = new Game({ seed: 'UPGRADE', difficulty: 'adept' });
+  const reachBreakthrough = () => {
+    g.state.required = g.state.meridians + 1;
+    const col = [];
+    for (let r = 13; r >= 1; r--) col.push(up(r, 'club'));
+    g.state.columns[0] = col;
+    g.settle();
+  };
+
+  for (let round = 1; round <= 3; round++) {
+    reachBreakthrough();
+    assert.equal(g.state.phase, 'breakthrough');
+    assert.deepEqual(g.state.offer.map((o) => o.key), ['talisman', 'cell']);
+    assert.equal(g.state.offer[0].held, round - 1, 'the offer names what you already hold');
+    assert.equal(g.state.offer[0].next, round);
+    g.chooseBoon(0);                       // always the talismans
+  }
+  assert.equal(g.state.boons.talisman, 3);
+});
+
+test('each Blank Talisman puts two more wilds in the deal', () => {
+  const g = new Game({ seed: 'WILDS', difficulty: 'adept' });
+  assert.equal(g.realmConfig(1).wilds, 0);
+  g.state.boons = { talisman: 1 };
+  assert.equal(g.realmConfig(1).wilds, 2);
+  g.state.boons = { talisman: 3 };
+  assert.equal(g.realmConfig(1).wilds, 6);
+
+  g.dealRealm(2);
+  const inPlay = [...g.state.columns.flat(), ...g.state.stock];
+  assert.equal(inPlay.filter((c) => c.wild).length, 6);
+  assert.equal(inPlay.length, g.realmConfig(2).sets * 13 + 6);
+});
+
+test('each Dantian Cell adds one reserve slot, and a slot holds one card', () => {
+  const g = new Game({ seed: 'CELLS', difficulty: 'adept' });
+  assert.equal(g.state.reserve.length, 0);
+  g.state.boons = { cell: 2 };
+  g.dealRealm(2);
+  assert.equal(g.state.reserve.length, 2);
+  assert.ok(g.state.reserve.every((c) => c === null));
+
+  // One card per slot, and no more.
+  const col = g.state.columns.find((c) => c.length > 1);
+  const first = col[col.length - 1];
+  assert.equal(g.move({ zone: 'col', index: g.state.columns.indexOf(col), count: 1 }, { zone: 'reserve', index: 0 }), true);
+  assert.equal(g.state.reserve[0], first);
+  const other = g.state.columns.find((c) => c.length > 1);
+  assert.equal(
+    g.move({ zone: 'col', index: g.state.columns.indexOf(other), count: 1 }, { zone: 'reserve', index: 0 }),
+    false,
+    'a full slot takes no second card',
+  );
+});
+
+test('a cell that would uncover something keeps the run alive; an idle one does not', () => {
+  const withCell = rigged([[makeCard(4, 'spade', false), up(7, 'club')], [up(2, 'heart')]], { reserve: [null] });
+  assert.equal(withCell.hasLegalMove(), true);
+
+  const idleCell = rigged(
+    [[up(4, 'spade'), up(7, 'club')], [up(2, 'heart'), up(9, 'diamond')]],
+    { reserve: [null] },
+  );
+  assert.equal(idleCell.suggest().kind, 'over');
+  assert.equal(idleCell.hasLegalMove(), false);
+});
+
+test('the deck grows only by realm and talismans', () => {
+  const g = new Game({ seed: 'DECK', difficulty: 'adept' });
+  assert.equal(g.realmConfig(1).columns, BASE_COLUMNS);
+  g.state.boons = { talisman: 2, cell: 5 };
+  const cfg = g.realmConfig(4);
+  assert.equal(cfg.columns, BASE_COLUMNS, 'cells do not add columns');
+  assert.equal(cfg.wilds, 4);
+  assert.equal(cfg.required, cfg.sets);
 });

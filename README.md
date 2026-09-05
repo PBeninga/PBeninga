@@ -40,8 +40,7 @@ than the last**, and all of them must go.
 | 6 | 問道 Dao Seeking | 9 | 117 | 4 |
 | — | 飛昇 Immortal Ascension | *you win* | — | — |
 
-Five breakthroughs means **five boons out of twelve** in a full run — the
-choices are what make one climb differ from the next, and by the last realm
+Five breakthroughs means **five upgrades** in a full run, and by the last realm
 you are playing a bigger, four-suit board than standard Spider deals.
 
 Three difficulties change the starting deck and the suit ramp: **Novice**
@@ -71,7 +70,7 @@ Standard Spider, with two additions.
 The screen is laid out the way a solitaire app is: a stat row at the top
 (realm seal, **Realm / Meridians / Moves**, cultivation score), the stock band
 beneath it holding your techniques on the left and the deal fan on the right,
-the tableau, and a toolbar of **Menu · Paths · Deal · Hint · Undo** across the
+the tableau, and a toolbar of **Menu · Boons · Deal · Hint · Undo** across the
 bottom. The status line floats just above the toolbar and costs no board
 height when it has nothing to say.
 
@@ -118,52 +117,23 @@ dock beside the seed), so a stale cached page is obvious without opening
 devtools. `npm run build` stamps a content hash; running from `src/` reads
 `dev`.
 
-## The four paths
+## The two upgrades
 
-Each breakthrough offers the next unclaimed tier of three of the four paths.
-Tiers are taken in order and are permanent for the run.
+Every breakthrough offers the same two, and both repeat, so the only question a
+run ever asks is how to split five picks between them.
 
-| | I | II | III |
-|---|---|---|---|
-| **靈符 Talismans** | +2 wilds per deal | +2 more, always face up | +2 more; awaken a card into a wild, once per realm |
-| **斬道 Severance** | one fewer suit in every deal | change a card's suit, twice per realm | one fewer suit again; +1 transmutation |
-| **虛步 Void** | +1 reserve cell | place any card on any card, twice per realm | +1 cell, +2 void steps, and mixed-suit runs move as groups |
-| **開脈 Expansion** | +1 column | +1 column; each realm starts with one empty | +1 column; the deal skips your empty columns, leaving them open |
+| | | |
+|---|---|---|
+| **靈符 Blank Talisman** | +2 chaos talismans per deal | A talisman stands in for whatever rank and suit a run needs, sealed meridians included |
+| **虛步 Dantian Cell** | +1 reserve cell | A cell holds a single card outside the tableau, for as long as you need |
 
-An empty column is the most valuable thing on the board, and Expansion plays
-both sides of that: II hands you one at the start of every realm, and III stops
-the stock from filling the ones you have fought for.
+They solve different problems. Talismans fix the board you were dealt — a gap
+in a sequence stops mattering. Cells fix the board you have made — somewhere to
+put the card that is in the way. Talismans compound (each deal carries them
+all); cells are a standing allowance you spend and reclaim.
 
-## On phones
-
-Ten columns on a 390px screen is the hard constraint, so the phone layout is
-built around it rather than against it.
-
-- Cards shrink to fit all ten columns — never a sideways scroll — and below
-  54px they drop the centre pip so the corner rank can grow into the space.
-  The exposed sliver of a stacked card grows to match, so a buried rank stays
-  readable.
-- The board claims every touch gesture over it (`touch-action: none`), so a
-  drag is never stolen by the page trying to scroll. A dragged stack floats
-  above the fingertip instead of hiding under it, and the drop lands where the
-  cards are, not where the finger is.
-- A tap plays the card immediately, which is the whole interaction on a phone —
-  no pick-up-then-place, no double-tap, nothing to mis-aim. A cancelled gesture
-  (an incoming call, a system swipe) puts the cards back rather than leaving
-  them floating.
-- Everything shrinks by breakpoint rather than reflowing: the stat row, the
-  stock fan and the toolbar all have phone and landscape-phone sizes. The
-  toolbar keeps 46px targets in portrait and drops to 36px in landscape, where
-  height is the scarce thing. Hint and Undo sit in a bottom dock under the thumbs, and every
-  control stays at least 40px tall.
-- Landscape gets nearly double the card size and a single-line HUD.
-- Overlays are laid out three ways — full cards on desktop, compact rows in
-  portrait, three abreast in landscape — because at 342px tall a stacked offer
-  pushed the third choice off screen where nobody would find it.
-
-`test/browser.mjs` asserts all of this on iPhone portrait and landscape,
-Pixel 7 and iPad Mini: no overflow, real touch drags, tap targets, and every
-overlay fitting its viewport without scrolling.
+Talismans are dealt face down like any other card, so buying them is a bet on
+finding them.
 
 ## Layout
 
@@ -193,8 +163,10 @@ lookahead, random boon choices, never touches reserve cells or charges), over
 | | clears realm 1 | avg realm reached | ascended |
 |---|---|---|---|
 | Novice | 35% | 1.5 | 0/60 |
-| Adept | 43% | 1.6 | 0/60 |
-| Immortal | 43% | 1.6 | 0/60 |
+
+Adept and Immortal were mid-measurement when the upgrade rewrite landed; the
+figures above them are from the four-path build and no longer describe this
+one.
 
 (Measured after the stock stopped being blocked by empty columns, which lifted
 every figure a little.) The bot is much weaker than a person — a one-suit board
@@ -219,8 +191,10 @@ Known open questions:
 
 - A full Adept run is 39 sequences across six realms, and realm 6 is a harder
   board than standard four-suit Spider. Six realms may want to be four.
-- Fortune, the filler boon, is nearly unreachable: paths only run out of tiers
-  after ten picks and a run offers five.
+- With two upgrades and five picks, a run has only six possible builds. That is
+  a clean decision but a shallow one; it may want a third option.
 - Sealing a meridian has no animation yet, just a toast.
 - A tap has no way to reach a reserve cell; that is drag-only on purpose, but
   it may want a gesture of its own.
+- Talismans are invisible until flipped, so their value is felt rather than
+  seen. Dealing them face up would read better but leak information.

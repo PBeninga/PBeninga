@@ -2,8 +2,8 @@
 // in this file.
 
 import { Game, REALMS, ASCENSION, DIFFICULTIES, serialize, deserialize } from './engine.js';
-import { SUITS, SUIT_GLYPH, SUIT_NAME, RANK_LABEL } from './cards.js';
-import { PATH_BY_KEY } from './paths.js';
+import { SUIT_GLYPH, RANK_LABEL } from './cards.js';
+import { boonSummary } from './paths.js';
 import { randomSeed } from './rng.js';
 
 // Replaced with a content hash by build.js; stays "dev" when running from src.
@@ -25,8 +25,6 @@ const el = (tag, cls, html) => {
 };
 
 let game = null;
-let armed = null;            // 'void' | 'transmute' | 'awaken'
-let pendingTransmute = null;
 let drag = null;
 let hint = null;             // {moves, index, timers, layer}
 let offsets = { up: 0, down: 0 };
@@ -141,9 +139,6 @@ function renderTop() {
     cells.appendChild(c);
   });
 
-  chargeButton('#btn-void', 'void', s.charges.voidStep, 'Void Step');
-  chargeButton('#btn-transmute', 'transmute', s.charges.transmute, 'Transmute');
-  chargeButton('#btn-awaken', 'awaken', s.charges.awaken, 'Awaken');
   renderStock();
 }
 
@@ -171,14 +166,6 @@ function renderStock() {
     row.insertBefore(count, fan);
   }
   count.textContent = deals ? `${deals} deal${deals > 1 ? 's' : ''} left` : 'stock spent';
-}
-
-function chargeButton(sel, mode, count, label) {
-  const b = $(sel);
-  b.hidden = count === 0 && armed !== mode;
-  b.disabled = count === 0;
-  b.classList.toggle('armed', armed === mode);
-  b.innerHTML = `${label} <span class="count">${count}</span>`;
 }
 
 function renderBoard() {
@@ -230,7 +217,7 @@ function renderDock() {
   if (hint) {
     status.appendChild(el('span', 'hint-count', hintStatusText()));
   } else if (game.isStagnant()) {
-    status.appendChild(el('span', 'warn', '⚠ No moves left — undo, spend a technique, or abandon the climb.'));
+    status.appendChild(el('span', 'warn', '⚠ No moves left — undo, or abandon the climb.'));
   } else if (s.log[0]) {
     status.appendChild(el('span', '', s.log[0]));
   }
@@ -251,11 +238,7 @@ function markTargets(run, on) {
     if (!on) return;
     const i = Number(colEl.dataset.col);
     if (drag && drag.zone === 'col' && drag.index === i) return;
-    if (armed === 'void' && game.canDrop(run, { zone: 'col', index: i }, { force: true })) {
-      colEl.classList.add('drop-forced');
-    } else if (game.canDrop(run, { zone: 'col', index: i })) {
-      colEl.classList.add('drop-ok');
-    }
+    if (game.canDrop(run, { zone: 'col', index: i })) colEl.classList.add('drop-ok');
   });
 }
 
@@ -348,12 +331,10 @@ function doDeal() {
 }
 
 function attempt(from, to, { animate = false } = {}) {
-  const force = armed === 'void';
   const before = game.state.totalMeridians;
   const positions = animate ? snapshotPositions() : null;
-  const ok = game.move(from, to, { force });
+  const ok = game.move(from, to);
   if (ok) {
-    if (force) armed = null;
     if (game.state.totalMeridians > before) toast('Meridian sealed');
     afterAction();
     if (positions) flyFrom(positions);
@@ -524,12 +505,6 @@ function onPointerDown(ev) {
   const card = column[idx];
   if (!card.faceUp) return;
 
-  if (armed === 'transmute') return openSuitPicker({ zone: 'col', index: col, cardIndex: idx });
-  if (armed === 'awaken') {
-    if (game.awaken({ zone: 'col', index: col, cardIndex: idx })) { armed = null; toast('Talisman awakened'); afterAction(); }
-    return;
-  }
-
   const count = column.length - idx;
   drag = {
     zone: 'col', index: col, count, active: false,
@@ -626,11 +601,6 @@ function onCardTap(d) {
 
 function onCellTap(index) {
   const card = game.state.reserve[index];
-  if (armed === 'transmute' && card) return openSuitPicker({ zone: 'reserve', index });
-  if (armed === 'awaken' && card) {
-    if (game.awaken({ zone: 'reserve', index })) { armed = null; afterAction(); }
-    return;
-  }
   if (!card) return;
   const from = { zone: 'reserve', index };
   const target = game.bestTargetFor(from);
@@ -650,30 +620,6 @@ function overlay(html) {
 }
 
 function closeOverlay() { $('#overlay').hidden = true; }
-
-function openSuitPicker(ref) {
-  pendingTransmute = ref;
-  const p = el('div', 'panel');
-  p.appendChild(el('h2', '', 'Transmutation'));
-  p.appendChild(el('p', '', 'Reforge this card into another dao.'));
-  const row = el('div', 'suit-picker');
-  for (const suit of SUITS) {
-    const b = el('button', '', `${SUIT_GLYPH[suit]}<br><span style="font-size:10px;letter-spacing:.1em">${SUIT_NAME[suit]}</span>`);
-    b.style.color = suit === 'heart' || suit === 'diamond' ? 'var(--cinnabar)' : 'var(--paper)';
-    b.onclick = () => {
-      closeOverlay();
-      if (game.transmute(pendingTransmute, suit)) { armed = null; toast('Reforged'); }
-      pendingTransmute = null;
-      afterAction();
-    };
-    row.appendChild(b);
-  }
-  p.appendChild(row);
-  const cancel = el('button', '', 'Cancel');
-  cancel.onclick = () => { closeOverlay(); pendingTransmute = null; armed = null; render(); };
-  p.appendChild(cancel);
-  overlay(p);
-}
 
 function rulesHtml() {
   return `<details class="rules-toggle"${isNarrow() ? '' : ' open'}>
@@ -700,7 +646,7 @@ function rulesHtml() {
       <h3>Techniques &amp; Keys</h3>
       <ul>
         <li><b>Talismans</b> (☯) stand in for any rank and suit, in a stack or inside a sealed meridian.</li>
-        <li><b>Void Step</b>, <b>Transmute</b> and <b>Awaken</b> are charges: arm the button, then click a card.</li>
+        <li>A <b>reserve cell</b> holds one card outside the tableau. Drag a card in; tap it to send it back.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
         <li>Stuck? <b>Hint</b> walks every move the position offers, one a
         second, showing where each one lands — best first. Anything you do
@@ -717,15 +663,12 @@ function pauseScreen() {
   p.appendChild(el('p', '', 'The climb waits.'));
   p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b>`
     + ` · ${DIFFICULTIES[game.difficulty].name} · build ${buildTag()}`));
-  const taken = Object.entries(game.state.boons);
-  if (!taken.length && !game.state.fortune) {
-    p.appendChild(el('p', '', 'You have walked no path yet. Clear a board to choose one.'));
-  }
-  if (taken.length || game.state.fortune) {
-    const list = taken
-      .map(([k, t]) => `<b style="color:var(--gold)">${PATH_BY_KEY[k].hanzi} ${PATH_BY_KEY[k].tiers[t - 1].name}</b>`)
-      .concat(game.state.fortune ? [`<b style="color:var(--gold)">天緣 Fortune ×${game.state.fortune}</b>`] : []);
-    p.appendChild(el('p', '', 'Boons held: ' + list.join(' · ')));
+  const held = boonSummary(game.state.boons);
+  if (!held.length) {
+    p.appendChild(el('p', '', 'No boons yet. Clear a board to earn one.'));
+  } else {
+    p.appendChild(el('p', '', 'Boons held: ' + held
+      .map((u) => `<b style="color:var(--gold)">${u.hanzi} ${u.name} ×${u.count}</b>`).join(' · ')));
   }
   const row = el('div');
   const resume = el('button', 'big', 'Resume');
@@ -795,15 +738,15 @@ function breakthroughScreen() {
   p.appendChild(el('p', 'lead',
     `${REALMS[s.realm - 1].name} is cleared. Ahead lies <b style="color:var(--gold)">${next.name}</b>, `
     + `a board of <b style="color:var(--gold)">${game.realmConfig(s.realm + 1).required} sequences</b>, all of which must go.`));
-  p.appendChild(el('p', '', 'Choose the dao you will walk. The choice is permanent.'));
+  p.appendChild(el('p', '', 'Take one. It lasts the rest of the run.'));
   const offer = el('div', 'offer');
   s.offer.forEach((boon, i) => {
     const b = el('div', 'boon');
     b.innerHTML = `<div class="hanzi">${boon.hanzi}</div>
-      <div class="path">${boon.path}</div>
+      <div class="path">${boon.each}</div>
       <div class="name">${boon.name}</div>
       <div class="desc">${boon.desc}</div>
-      ${boon.type === 'path' ? `<div class="tier">TIER ${boon.tier} OF 3</div>` : ''}`;
+      <div class="tier">${boon.held ? `YOU HOLD ${boon.held} — THIS MAKES ${boon.next}` : 'YOUR FIRST'}</div>`;
     b.onclick = () => {
       game.chooseBoon(i);
       closeOverlay();
@@ -843,9 +786,10 @@ function endScreen(won) {
   tally.appendChild(stat(score, 'Cultivation'));
   p.appendChild(tally);
 
-  if (Object.keys(s.boons).length) {
-    p.appendChild(el('p', '', 'Paths walked: ' + Object.entries(s.boons)
-      .map(([k, t]) => `${PATH_BY_KEY[k].name} ${'I'.repeat(t)}`).join(' · ')));
+  const held = boonSummary(s.boons);
+  if (held.length) {
+    p.appendChild(el('p', '', 'Boons held: '
+      + held.map((u) => `${u.name} ×${u.count}`).join(' · ')));
   }
   p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b> · ${DIFFICULTIES[game.difficulty].name}`));
 
@@ -897,7 +841,6 @@ function save() {
 function start(seed, difficulty) {
   stopHint();
   game = new Game({ seed, difficulty });
-  armed = null;
   closeOverlay();
   render();
 }
@@ -907,15 +850,8 @@ function bindChrome() {
   $('#btn-deal').addEventListener('click', doDeal);
   $('#btn-paths').addEventListener('click', () => { stopHint(); pauseScreen(); });
   $('#btn-undo').addEventListener('click', () => {
-    if (game && game.undo()) { armed = null; afterAction(); }
+    if (game && game.undo()) afterAction();
   });
-  for (const [sel, mode] of [['#btn-void', 'void'], ['#btn-transmute', 'transmute'], ['#btn-awaken', 'awaken']]) {
-    $(sel).addEventListener('click', () => {
-      stopHint();
-      armed = armed === mode ? null : mode;
-      render();
-    });
-  }
   $('#btn-menu').addEventListener('click', () => {
     stopHint();
     if (!game) titleScreen();
@@ -931,7 +867,7 @@ function bindChrome() {
   window.addEventListener('orientationchange', () => setTimeout(relayout, 120));
   window.addEventListener('keydown', (e) => {
     if (!game || game.state.phase !== 'play') return;
-    if (e.key === 'Escape') { stopHint(); armed = null; markTargets(null, false); render(); }
+    if (e.key === 'Escape') { stopHint(); markTargets(null, false); render(); }
     if (e.key === 'h') { e.preventDefault(); if (hint) stopHint(); else startHint(); return; }
     cancelHint();
     if ((e.key === 'z' && (e.metaKey || e.ctrlKey)) || e.key === 'u') {

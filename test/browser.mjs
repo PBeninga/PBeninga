@@ -513,14 +513,14 @@ for (const view of VIEWS) {
     await stash(page);
     await page.evaluate(() => {
       const g = window.NineMeridians.game;
-      g.state.boons = { void: 2, talisman: 1 };
+      g.state.boons = { talisman: 2, cell: 1 };
       window.NineMeridians.render();
     });
     await page.click('#btn-paths');
     await page.waitForTimeout(250);
     const text = await page.evaluate(() => document.querySelector('#overlay .panel').textContent);
-    if (!/Void Step/.test(text) || !/Blank Talisman/.test(text)) {
-      throw new Error('the panel did not name the boons held');
+    if (!/Blank Talisman ×2/.test(text) || !/Dantian Cell ×1/.test(text)) {
+      throw new Error('the panel did not name the boons held: ' + JSON.stringify(text.slice(0, 200)));
     }
     await page.evaluate(() => document.querySelector('#overlay .big').click());
     await page.waitForTimeout(200);
@@ -548,7 +548,7 @@ for (const view of VIEWS) {
       return { boons: document.querySelectorAll('.boon').length,
         clipped: o.scrollHeight > o.clientHeight + 1 || o.scrollWidth > o.clientWidth + 1 };
     });
-    if (r.boons !== 3) throw new Error('expected three boons, got ' + r.boons);
+    if (r.boons !== 2) throw new Error('expected two upgrades, got ' + r.boons);
     if (r.clipped) throw new Error('a choice sits outside the viewport');
     await page.locator('.boon').first().click();
     await page.waitForTimeout(300);

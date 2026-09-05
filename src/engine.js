@@ -48,9 +48,7 @@ export class Game {
       columns: [],
       reserve: [],
       stock: [],
-      boons: {},              // pathKey -> tier
-      fortune: 0,
-      charges: { voidStep: 0, transmute: 0, awaken: 0 },
+      boons: {},              // upgrade key -> how many times taken
       undosLeft: UNDOS_PER_REALM,
       moves: 0,
       offer: [],
@@ -61,41 +59,22 @@ export class Game {
 
   // ---------------------------------------------------------------- config
 
-  tier(pathKey) { return this.state.boons[pathKey] || 0; }
+  /** How many times an upgrade has been taken. */
+  held(key) { return this.state.boons[key] || 0; }
 
   realmConfig(realm) {
-    const s = this.state;
     const diff = DIFFICULTIES[this.difficulty];
     const sets = diff.startSets + (realm - 1);
-    // Clear the board to break through. Fortune is the one thing that lets you
-    // leave a sequence on the table.
-    const required = Math.max(1, sets - s.fortune);
-    const severed = this.tier('severance') >= 3 ? 2 : this.tier('severance') >= 1 ? 1 : 0;
-    const suitCount = Math.max(1, Math.min(SUITS.length, diff.suits[realm - 1] - severed));
-    const columns = BASE_COLUMNS + this.tier('expansion');
-    const wilds = this.tier('talisman') * 2;
-    return { required, sets, suitCount, columns, wilds };
-  }
-
-  reserveCells() {
-    const t = this.tier('void');
-    return (t >= 1 ? 1 : 0) + (t >= 3 ? 1 : 0);
-  }
-
-  mixedSuitMoves() { return this.tier('void') >= 3; }
-  wildsFaceUp() { return this.tier('talisman') >= 2; }
-  /** Boundless Field: the deal leaves your hard-won empty columns alone. */
-  dealSkipsEmpties() { return this.tier('expansion') >= 3; }
-
-  freshCharges() {
-    const v = this.tier('void');
-    const s = this.tier('severance');
     return {
-      voidStep: (v >= 2 ? 2 : 0) + (v >= 3 ? 2 : 0),
-      transmute: (s >= 2 ? 2 : 0) + (s >= 3 ? 1 : 0),
-      awaken: this.tier('talisman') >= 3 ? 1 : 0,
+      required: sets,            // a realm ends when the board is clear
+      sets,
+      suitCount: Math.max(1, Math.min(SUITS.length, diff.suits[realm - 1])),
+      columns: BASE_COLUMNS,
+      wilds: this.held('talisman') * 2,
     };
   }
+
+  reserveCells() { return this.held('cell'); }
 
   // ----------------------------------------------------------------- deal
 
@@ -103,16 +82,13 @@ export class Game {
     const s = this.state;
     const cfg = this.realmConfig(realm);
     const deck = buildDeck(cfg, this.rng);
-    if (this.wildsFaceUp()) for (const c of deck) if (c.wild) c.faceUp = true;
 
     const total = deck.length;
     const stockDeals = Math.max(2, Math.min(6, Math.floor((total - cfg.columns * 4) / cfg.columns)));
     const initialCount = total - stockDeals * cfg.columns;
 
-    // Wide Channels leaves one column empty at the deal.
-    const dealInto = this.tier('expansion') >= 2 ? cfg.columns - 1 : cfg.columns;
     const columns = Array.from({ length: cfg.columns }, () => []);
-    for (let i = 0; i < initialCount; i++) columns[i % dealInto].push(deck.pop());
+    for (let i = 0; i < initialCount; i++) columns[i % cfg.columns].push(deck.pop());
     for (const col of columns) {
       for (let i = 0; i < col.length; i++) col[i].faceUp = col[i].wild ? col[i].faceUp : false;
       if (col.length) col[col.length - 1].faceUp = true;
@@ -124,7 +100,6 @@ export class Game {
     s.columns = columns;
     s.stock = deck;
     s.reserve = Array.from({ length: this.reserveCells() }, () => null);
-    s.charges = this.freshCharges();
     s.undosLeft = UNDOS_PER_REALM;
     s.phase = 'play';
     s.offer = [];
@@ -166,7 +141,7 @@ export class Game {
   // ------------------------------------------------------------- querying
 
   columnTail(colIndex) {
-    return movableTail(this.state.columns[colIndex], { mixedSuit: this.mixedSuitMoves() });
+    return movableTail(this.state.columns[colIndex], { mixedSuit: false });
   }
 
   /** Can the player pick up `count` cards from the foot of column `i`? */
@@ -176,8 +151,8 @@ export class Game {
     return count <= this.columnTail(colIndex);
   }
 
-  /** Where can a grabbed run legally land? `force` spends a void step. */
-  canDrop(run, dest, { force = false } = {}) {
+  /** Where can a grabbed run legally land? */
+  canDrop(run, dest) {
     const s = this.state;
     if (dest.zone === 'reserve') {
       if (run.length !== 1) return false;
@@ -186,8 +161,7 @@ export class Game {
     const col = s.columns[dest.index];
     const target = col.length ? col[col.length - 1] : null;
     if (!target) return true;
-    if (force) return target.faceUp;
-    const info = runInfo(run, { sameSuit: !this.mixedSuitMoves() });
+    const info = runInfo(run, { sameSuit: true });
     if (!info.valid) return false;
     return canStackOn(info, run, target);
   }
@@ -208,17 +182,16 @@ export class Game {
    * Move cards between tableau columns and reserve cells.
    * @returns {boolean} whether the move happened.
    */
-  move(from, to, { force = false } = {}) {
+  move(from, to) {
     const s = this.state;
     if (s.phase !== 'play') return false;
     if (from.zone === to.zone && from.index === to.index) return false;
-    if (force && s.charges.voidStep <= 0) return false;
 
     const run = this.takeRun(from);
     if (!run || !run.length) return false;
     if (from.zone === 'col' && !this.canGrab(from.index, run.length)) return false;
     if (run.some((c) => !c.faceUp)) return false;
-    if (!this.canDrop(run, to, { force })) return false;
+    if (!this.canDrop(run, to)) return false;
     // Shuffling a whole column into an empty one achieves nothing.
     if (from.zone === 'col' && to.zone === 'col'
       && run.length === s.columns[from.index].length && s.columns[to.index].length === 0) return false;
@@ -230,10 +203,6 @@ export class Game {
     if (to.zone === 'reserve') s.reserve[to.index] = run[0];
     else s.columns[to.index].push(...run);
 
-    if (force) {
-      s.charges.voidStep--;
-      this.log(`Void Step: ${run.length} card${run.length > 1 ? 's' : ''} placed against the dao.`);
-    }
     s.moves++;
     this.settle();
     return true;
@@ -249,8 +218,7 @@ export class Game {
     const s = this.state;
     if (!this.canDeal()) return false;
     this.pushUndo();
-    const targets = this.dealTargets();
-    for (const i of targets) {
+    for (let i = 0; i < s.columns.length; i++) {
       if (!s.stock.length) break;
       const card = s.stock.pop();
       card.faceUp = true;
@@ -262,64 +230,14 @@ export class Game {
     return true;
   }
 
-  /** Which columns the next deal would land in. */
-  dealTargets() {
-    const s = this.state;
-    const all = s.columns.map((_, i) => i);
-    if (!this.dealSkipsEmpties()) return all;
-    const kept = all.filter((i) => s.columns[i].length > 0);
-    return kept.length ? kept : all;   // never skip every column
-  }
-
   canDeal() {
     return this.state.phase === 'play' && this.state.stock.length > 0;
   }
 
   /** How many more rows the stock can deal -- the last one may be partial. */
   dealsLeft() {
-    const targets = this.dealTargets().length;
-    return targets ? Math.ceil(this.state.stock.length / targets) : 0;
-  }
-
-  // ------------------------------------------------------------- charges
-
-  transmute(ref, suit) {
-    const s = this.state;
-    if (s.phase !== 'play' || s.charges.transmute <= 0) return false;
-    if (!SUITS.includes(suit)) return false;
-    const card = this.cardAt(ref);
-    if (!card || !card.faceUp || card.wild || card.suit === suit) return false;
-    this.pushUndo();
-    card.suit = suit;
-    s.charges.transmute--;
-    s.moves++;
-    this.log('Transmutation: a card is reforged.');
-    this.settle();
-    return true;
-  }
-
-  awaken(ref) {
-    const s = this.state;
-    if (s.phase !== 'play' || s.charges.awaken <= 0) return false;
-    const card = this.cardAt(ref);
-    if (!card || !card.faceUp || card.wild) return false;
-    this.pushUndo();
-    card.wild = true;
-    card.rank = 0;
-    card.suit = 'wild';
-    s.charges.awaken--;
-    s.moves++;
-    this.log('A card awakens into a chaos talisman.');
-    this.settle();
-    return true;
-  }
-
-  cardAt(ref) {
-    const s = this.state;
-    if (ref.zone === 'reserve') return s.reserve[ref.index];
-    const col = s.columns[ref.index];
-    const i = ref.cardIndex === undefined ? col.length - 1 : ref.cardIndex;
-    return col[i];
+    const cols = this.state.columns.length;
+    return cols ? Math.ceil(this.state.stock.length / cols) : 0;
   }
 
   // ---------------------------------------------------------- resolution
@@ -354,7 +272,7 @@ export class Game {
         this.log('You step beyond the mortal coil. Ascension.');
       } else {
         s.phase = 'breakthrough';
-        s.offer = offerBoons(s.boons, this.rng);
+        s.offer = offerBoons(s.boons);
         this.log(`Breakthrough! ${REALMS[s.realm - 1].name} complete.`);
       }
       return;
@@ -366,14 +284,13 @@ export class Game {
   }
 
   /**
-   * The run continues while there is something worth doing: a suggestion, a
-   * technique still charged, or a cell to park a card in -- and a cell only
-   * counts when parking would uncover a face-down card or empty a column,
-   * since shuffling one card in and out forever is not a way out.
+   * The run continues while there is something worth doing: a suggestion, or a
+   * cell to park a card in -- and a cell only counts when parking would uncover
+   * a face-down card or empty a column, since shuffling one card in and out
+   * forever is not a way out.
    */
   hasLegalMove() {
     const s = this.state;
-    if (s.charges.voidStep > 0 || s.charges.transmute > 0 || s.charges.awaken > 0) return true;
     if (s.reserve.some((r) => r === null)
       && s.columns.some((c) => c.length === 1 || (c.length > 1 && !c[c.length - 2].faceUp))) return true;
     return this.suggest().kind !== 'over';
@@ -404,9 +321,8 @@ export class Game {
     if (s.phase !== 'breakthrough') return false;
     const boon = s.offer[index];
     if (!boon) return false;
-    if (boon.type === 'fortune') s.fortune++;
-    else s.boons[boon.key] = boon.tier;
-    this.log(`You walk the ${boon.path}: ${boon.name}.`);
+    s.boons[boon.key] = (s.boons[boon.key] || 0) + 1;
+    this.log(`${boon.name} ×${s.boons[boon.key]}.`);
     this.dealRealm(s.realm + 1);
     return true;
   }
@@ -426,7 +342,7 @@ export class Game {
     const under = src && src.length > run.length ? src[src.length - run.length - 1] : null;
     const landed = dest.concat(run);
     return {
-      resultRun: movableTail(landed, { mixedSuit: this.mixedSuitMoves() }),
+      resultRun: movableTail(landed, { mixedSuit: false }),
       seals: completedMeridian(landed) !== null,
       exposes: !!(under && !under.faceUp),
       empties: !!(src && src.length === run.length),
