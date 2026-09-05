@@ -373,6 +373,57 @@ for (const view of VIEWS) {
     await unstash(page);
   });
 
+  await check('the empty-column hint carries the whole run', async () => {
+    await hintOff(page);
+    await stash(page);
+    const expected = await page.evaluate(() => {
+      const g = window.Ascendant.game;
+      // One buried card, a three-card run, and somewhere to put it.
+      g.state.columns = g.state.columns.map(() => []);
+      g.state.columns[0] = [
+        { id: 9400, rank: 2, suit: 'spade', faceUp: false, wild: false },
+        { id: 9401, rank: 9, suit: 'spade', faceUp: true, wild: false },
+        { id: 9402, rank: 8, suit: 'spade', faceUp: true, wild: false },
+        { id: 9403, rank: 7, suit: 'spade', faceUp: true, wild: false },
+      ];
+      g.state.stock = [];
+      g.state.reserve = [];
+      window.Ascendant.render();
+      const s = g.suggest();
+      return { kind: s.kind, count: s.moves[0] && s.moves[0].from.count };
+    });
+    if (expected.kind !== 'empty') throw new Error('expected empty-column advice, got ' + expected.kind);
+    if (expected.count !== 3) throw new Error('the engine offered ' + expected.count + ' of a three-card run');
+
+    await page.click('#btn-hint');
+    await page.waitForTimeout(200);
+    const ghosts = await page.evaluate(() => document.querySelectorAll('.hint-layer .card').length);
+    if (ghosts !== 3) throw new Error(`the ghost showed ${ghosts} cards, not the whole run`);
+    await hintOff(page);
+    await unstash(page);
+  });
+
+  await check('with nothing buried, the hint says deal rather than fill a column', async () => {
+    await hintOff(page);
+    await stash(page);
+    const kind = await page.evaluate(() => {
+      const g = window.Ascendant.game;
+      g.state.columns = g.state.columns.map(() => []);
+      g.state.columns[0] = [
+        { id: 9410, rank: 9, suit: 'spade', faceUp: true, wild: false },
+        { id: 9411, rank: 8, suit: 'spade', faceUp: true, wild: false },
+      ];
+      g.state.columns[1] = [{ id: 9412, rank: 2, suit: 'spade', faceUp: true, wild: false }];
+      g.state.stock = [{ id: 9413, rank: 5, suit: 'spade', faceUp: false, wild: false }];
+      g.state.reserve = [];
+      window.Ascendant.render();
+      return { suggest: g.suggest().kind, emptyLegal: g.listMoves().some((m) => m.destEmpty) };
+    });
+    if (!kind.emptyLegal) throw new Error('the rig has no empty-column move to reject');
+    if (kind.suggest !== 'deal') throw new Error('expected deal advice, got ' + kind.suggest);
+    await unstash(page);
+  });
+
   await check('any action cancels the hint', async () => {
     if (!(await page.evaluate(() => !!document.querySelector('.hint-layer')))) {
       await page.click('#btn-hint');

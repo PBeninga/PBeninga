@@ -582,3 +582,49 @@ test('with one suit, any descending run lifts as a group', () => {
   assert.equal(g.move({ zone: 'col', index: 0, count: 3 }, { zone: 'col', index: 1 }), true);
   assert.equal(g.state.columns[1].length, 4);
 });
+
+test('an empty column is offered the whole run, not just the top card', () => {
+  const g = rigged([
+    [makeCard(2, 'heart', false), up(9, 'spade'), up(8, 'spade'), up(7, 'spade')],
+    [],
+  ]);
+  const s = g.suggest();
+  assert.equal(s.kind, 'empty', 'a face-down card is still buried, so the column is worth filling');
+  const move = s.moves.find((m) => m.destEmpty);
+  assert.ok(move);
+  assert.equal(move.from.count, 3, 'all three of the run should go');
+  assert.equal(move.resultRun, 3);
+  assert.equal(s.moves.filter((m) => m.destEmpty).length, 1, 'and offered once');
+});
+
+test('every empty column is the same suggestion', () => {
+  const g = rigged([
+    [makeCard(2, 'heart', false), up(9, 'spade'), up(8, 'spade')],
+    [], [], [],
+  ]);
+  const empties = g.listMoves().filter((m) => m.destEmpty);
+  assert.equal(empties.length, 1);
+  assert.equal(empties[0].from.count, 2);
+});
+
+test('with nothing buried, dealing beats filling an empty column', () => {
+  // Every card face up: moving into the empty column can uncover nothing.
+  const g = rigged([[up(9, 'spade'), up(8, 'spade')], [up(2, 'heart')], []]);
+  g.state.stock = [makeCard(5, 'spade'), makeCard(6, 'spade')];
+  assert.ok(g.listMoves().some((m) => m.destEmpty), 'the move is still legal');
+  assert.equal(g.suggest().kind, 'deal');
+});
+
+test('with something buried, the empty column comes first', () => {
+  const g = rigged([[makeCard(4, 'spade', false), up(9, 'spade')], [up(2, 'heart')], []]);
+  g.state.stock = [makeCard(5, 'spade'), makeCard(6, 'spade')];
+  assert.equal(g.suggest().kind, 'empty');
+});
+
+test('with the stock spent, an empty column is the last resort', () => {
+  const g = rigged([[up(9, 'spade'), up(8, 'spade')], [up(2, 'heart')], []]);
+  assert.equal(g.state.stock.length, 0);
+  const s = g.suggest();
+  assert.equal(s.kind, 'empty', 'better than declaring the run over');
+  assert.equal(g.hasLegalMove(), true);
+});

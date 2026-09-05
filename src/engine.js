@@ -398,31 +398,44 @@ export class Game {
 
   /**
    * Every legal tableau move, best first -- the source of the hint carousel.
-   * Only the best lift is kept per source/destination pair, and only one empty
-   * destination per source; without that the same idea appears many times over.
-   * What survives runs a median of seven moves and tops out around fourteen,
-   * which is short enough to page through in full.
+   *
+   * Only the best lift is kept per source and destination, and every empty
+   * column counts as the same destination, since dropping into one is the same
+   * idea whichever one you pick. "Best" is what settles how much of the run
+   * goes: into an empty column a longer run scores higher, so the whole run is
+   * what gets offered.
    */
   listMoves({ limit = 0 } = {}) {
     const s = this.state;
     if (s.phase !== 'play') return [];
     const out = [];
-    const emptySeen = new Set();
 
-    const consider = (from, key, wholeRun) => {
+    const landings = (from, tail) => {
       const run = this.takeRun(from);
-      if (!run || !run.length || run.some((c) => !c.faceUp)) return;
+      if (!run || !run.length || run.some((c) => !c.faceUp)) return [];
+      const found = [];
       for (let j = 0; j < s.columns.length; j++) {
         if (from.zone === 'col' && j === from.index) continue;
         const destEmpty = s.columns[j].length === 0;
+        // Emptying one column to fill another gains nothing.
         if (destEmpty && from.zone === 'col' && from.count === s.columns[from.index].length) continue;
-        if (destEmpty && emptySeen.has(key)) continue;
         if (!this.canDrop(run, { zone: 'col', index: j })) continue;
-        if (destEmpty) emptySeen.add(key);
-        out.push({
-          from, to: { zone: 'col', index: j }, wholeRun,
-          ...this.moveScore(from, { zone: 'col', index: j }),
+        found.push({
+          key: destEmpty ? 'empty' : j,
+          move: {
+            from,
+            to: { zone: 'col', index: j },
+            wholeRun: from.zone === 'reserve' || from.count === tail,
+            ...this.moveScore(from, { zone: 'col', index: j }),
+          },
         });
+      }
+      return found;
+    };
+
+    const keepBest = (into, found) => {
+      for (const { key, move } of found) {
+        if (!into.has(key) || Game.better(move, into.get(key))) into.set(key, move);
       }
     };
 
@@ -430,18 +443,15 @@ export class Game {
       const tail = this.columnTail(i);
       const perDest = new Map();
       for (let n = 1; n <= tail; n++) {
-        const from = { zone: 'col', index: i, count: n };
-        const before = out.length;
-        consider(from, `c${i}`, n === tail);
-        for (const m of out.splice(before)) {
-          const key = m.to.index;
-          if (!perDest.has(key) || Game.better(m, perDest.get(key))) perDest.set(key, m);
-        }
+        keepBest(perDest, landings({ zone: 'col', index: i, count: n }, tail));
       }
       out.push(...perDest.values());
     }
     for (let i = 0; i < s.reserve.length; i++) {
-      if (s.reserve[i]) consider({ zone: 'reserve', index: i }, `r${i}`, true);
+      if (!s.reserve[i]) continue;
+      const perDest = new Map();
+      keepBest(perDest, landings({ zone: 'reserve', index: i }, 1));
+      out.push(...perDest.values());
     }
 
     out.sort((a, b) => (Game.better(a, b) ? -1 : Game.better(b, a) ? 1 : 0));
@@ -453,9 +463,10 @@ export class Game {
    *
    *   1. moves that bind a rune -- worth splitting a run for
    *   2. moves that carry a whole run somewhere, never breaking one up
-   *   3. failing both, moves into an empty column
+   *   3. failing both, moves into an empty column -- but only while something
+   *      is still face down for that to uncover
    *   4. failing that, deal another row
-   *   5. failing that, the run is over
+   *   5. failing that, an empty column after all, or the run is over
    *
    * @returns {{kind:'moves'|'empty'|'deal'|'over', moves: Array}}
    */
@@ -464,9 +475,15 @@ export class Game {
     const all = this.listMoves();
     const useful = all.filter((m) => m.seals || (m.wholeRun && !m.destEmpty));
     if (useful.length) return { kind: 'moves', moves: useful };
+
     const intoEmpty = all.filter((m) => m.destEmpty);
-    if (intoEmpty.length) return { kind: 'empty', moves: intoEmpty };
+    // Filling an empty column is only ever a way to get at something buried.
+    // With nothing face down left it uncovers nothing, so a fresh row is worth
+    // more than shuffling the board sideways.
+    const buried = this.state.columns.some((col) => col.some((c) => !c.faceUp));
+    if (intoEmpty.length && buried) return { kind: 'empty', moves: intoEmpty };
     if (this.canDeal()) return { kind: 'deal', moves: [] };
+    if (intoEmpty.length) return { kind: 'empty', moves: intoEmpty };
     return { kind: 'over', moves: [] };
   }
 

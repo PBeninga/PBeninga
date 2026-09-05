@@ -111,9 +111,11 @@ It only offers moves that are actually worth something, in this order:
 
 1. **moves that bind a rune** — worth splitting a run for, so these come first
 2. **moves that carry a whole run**, never breaking one up to no purpose
-3. failing both, **moves into an empty column**
+3. failing both, **moves into an empty column** — but only while something is
+   still face down for that to uncover, and always the whole run rather than
+   the card on top of it
 4. failing that, **deal another row** — the stock pulses instead of a card flying
-5. failing that, **the run is over**
+5. failing that, an empty column after all, or **the run is over**
 
 That last rung is also the game-over test: a rank ends when every card is
 bound, or when the chain runs out. A vault slot that would uncover something
