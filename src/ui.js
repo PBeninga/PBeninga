@@ -880,9 +880,9 @@ function titleScreen() {
       <div class="field"><label>Seed</label><input id="seed-input" placeholder="random" /></div>
       <div class="field"><label>Difficulty</label>
         <select id="diff-input">
-          <option value="novice">Novice — few suits, wide margins</option>
-          <option value="adept" selected>Adept — the intended climb</option>
-          <option value="immortal">Merciless — four suits, thin decks</option>
+          <option value="novice">Novice — 7 sequences to open</option>
+          <option value="adept" selected>Adept — two decks, the intended climb</option>
+          <option value="immortal">Merciless — 10 sequences to open</option>
         </select>
       </div>
     </div>

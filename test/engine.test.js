@@ -538,7 +538,8 @@ test('lastSealed is cleared by the next action', () => {
 
 test('progress runs from nothing to one across a whole climb', () => {
   const g = new Game({ seed: 'PROGRESS', difficulty: 'adept' });
-  assert.equal(g.totalSequences(), 4 + 5 + 6 + 7 + 8 + 9);
+  const start = DIFFICULTIES.adept.startSets;
+  assert.equal(g.totalSequences(), start + (start + 1) + (start + 2) + (start + 3) + (start + 4) + (start + 5));
   assert.equal(g.progress(), 0);
   g.state.totalRunes = g.totalSequences();
   assert.equal(g.progress(), 1);
@@ -546,5 +547,38 @@ test('progress runs from nothing to one across a whole climb', () => {
   assert.equal(g.progress(), 1, 'and never past it');
 
   const novice = new Game({ seed: 'PROGRESS', difficulty: 'novice' });
-  assert.equal(novice.totalSequences(), 3 + 4 + 5 + 6 + 7 + 8);
+  const n = DIFFICULTIES.novice.startSets;
+  assert.equal(novice.totalSequences(), n + (n + 1) + (n + 2) + (n + 3) + (n + 4) + (n + 5));
+});
+
+
+test('every card is a spade, at every rank and difficulty', () => {
+  for (const difficulty of Object.keys(DIFFICULTIES)) {
+    const g = new Game({ seed: 'SPADES', difficulty });
+    g.state.boons = { talisman: 2 };
+    for (const rank of [1, 3, 6]) {
+      g.dealRank(rank);
+      assert.equal(g.rankConfig(rank).suitCount, 1);
+      const all = [...g.state.columns.flat(), ...g.state.stock];
+      const suits = new Set(all.filter((c) => !c.wild).map((c) => c.suit));
+      assert.deepEqual([...suits], ['spade'], `${difficulty} rank ${rank}`);
+      assert.equal(all.filter((c) => c.wild).length, 4, 'wildstones are still dealt');
+    }
+  }
+});
+
+test('Adept opens on two full decks', () => {
+  const g = new Game({ seed: 'DECKS', difficulty: 'adept' });
+  const cfg = g.rankConfig(1);
+  assert.equal(cfg.sets, 8);
+  assert.equal(cfg.sets * 13, 104, 'two 52-card decks');
+  assert.equal(cfg.required, cfg.sets);
+  assert.equal(g.state.columns.flat().length + g.state.stock.length, 104);
+});
+
+test('with one suit, any descending run lifts as a group', () => {
+  const g = rigged([[up(9, 'spade'), up(8, 'spade'), up(7, 'spade')], [up(10, 'spade')]]);
+  assert.equal(g.canGrab(0, 3), true);
+  assert.equal(g.move({ zone: 'col', index: 0, count: 3 }, { zone: 'col', index: 1 }), true);
+  assert.equal(g.state.columns[1].length, 4);
 });

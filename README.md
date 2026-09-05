@@ -2,11 +2,11 @@
 
 A progression-fantasy roguelike played in Spider solitaire.
 
-Clearing a whole board of **K→A runs** is an advancement. Advance and you take
-a boon — but the next rank deals *one more sequence than the last*, and every
-one of them has to go into the core. Ember is a 52-card board. Sovereign is a
-117-card, four-suit board. The boons you take are the only thing that closes
-that gap.
+Every card is a spade. Clearing a whole board of **K→A runs** is an
+advancement — take a boon, and the next rank deals *one more sequence than the
+last*, every one of which has to go into the core. Ember opens on two full
+decks. Sovereign is a 169-card board. The boons you take are the only thing
+that closes that gap.
 
 No dependencies, no build step. Open `index.html` in a browser and play.
 
@@ -30,37 +30,40 @@ deck has to be bound before you advance. Finishing the first K→A of a rank is
 progress, not a level-up. Each rank then deals **one more sequence than the
 last**, and all of them must go.
 
-| Rank | Sequences to clear | Cards | Suits (Adept) |
-|---|---|---|---|
-| I **Ember** | 4 | 52 | 1 |
-| II **Iron** | 5 | 65 | 1 |
-| III **Silver** | 6 | 78 | 2 |
-| IV **Gold** | 7 | 91 | 2 |
-| V **Radiant** | 8 | 104 | 3 |
-| VI **Sovereign** | 9 | 117 | 4 |
-| — **Transcendence** | *you win* | — | — |
+| Rank | Sequences to clear | Cards |
+|---|---|---|
+| I **Ember** | 8 | 104 |
+| II **Iron** | 9 | 117 |
+| III **Silver** | 10 | 130 |
+| IV **Gold** | 11 | 143 |
+| V **Radiant** | 12 | 156 |
+| VI **Sovereign** | 13 | 169 |
+| — **Transcendence** | *you win* | — |
 
-Five advancements means **five boons** in a full run, and by the last rank
-you are playing a bigger, four-suit board than standard Spider deals.
+Five advancements means **five boons** in a full run — sixty-three sequences on
+Adept, from a classic two-deck single-suit Spider board up to something half
+again as deep.
 
-Three difficulties change the starting deck and the suit ramp: **Novice**
-(3 sequences up to 8, suits 1‑1‑1‑2‑2‑2), **Adept** (4 up to 9,
-suits 1‑1‑2‑2‑3‑4), **Merciless** (4 up to 9, suits 1‑2‑2‑4‑4‑4).
+With one suit, the deck's depth is the only dial left, so it is the one the
+difficulties turn: **Novice** opens on 7 sequences, **Adept** on 8 (two full
+decks — the classic single-suit Spider board), **Merciless** on 10. Each adds
+one per rank from there.
 
 ## Solitaire rules
 
 Standard Spider, with two additions.
 
-- Build **down by rank** onto any card; suit is irrelevant while stacking.
-- Lift a group only when it is a **descending run of a single suit**.
+- Build **down by rank** onto any card. Every card is a spade, so any
+  descending run lifts as a group — the punishment for a mixed stack is gone,
+  and what is left is the puzzle of what to bury and when.
 - Empty columns accept anything, and the stock deals one card to every column,
   empty ones included. The stock is drawn as **one card back per remaining
   deal**, so how many rows are still to come is something you read off the
   board rather than count. Spider forbids dealing while a column stands empty; that
   rule is dropped here, because a rank only ends once the board is clear, so
   every rune you seal would otherwise strand the stock.
-- A **K→A run of one suit** at the foot of a column binds itself as a rune and
-  goes into the core.
+- A **K→A run** at the foot of a column binds itself as a rune and goes into
+  the core.
 - **Wildstones** (✦) are wild: they adopt whatever rank and suit the run needs
   at their position, including inside a bound rune.
 - **Vault slots** hold one card each, off the board.
@@ -94,9 +97,8 @@ first — are **dimmed**, so the board shows at a glance what is actually in
 play.
 
 The scoring is deliberately literal: *how long is the run this creates?*
-Landing on a matching suit beats landing on a stranger, because it actually
-extends the run; a card that completes a K→A rune outranks everything,
-because that run is thirteen long. Only after run length do ties break on
+A card that completes a K→A rune outranks everything, because that run is
+thirteen long. Only after run length do ties break on
 flipping a face-down card, emptying a column, and finally on not wasting an
 empty column.
 
@@ -162,47 +164,31 @@ rule set is testable headlessly — which is what `test/` does.
 
 ## Balance
 
-Requiring a **cleared board** per rank, rather than a quota of sequences, made
-this a substantially harder game. Measured with a scripted greedy bot (no
-lookahead, random boon choices, never touches reserve cells or charges), over
-60 runs per difficulty:
+Every previous measurement described a four-suit game with a 52-card opening
+board, so none of it survives this build: single suit and two decks are the two
+largest changes the game has had. Numbers are being re-measured; until they
+land, treat the difficulty tables as untested.
 
-| | clears Ember | avg rank reached | ascended |
-|---|---|---|---|
-| Novice | 35% | 1.5 | 0/60 |
-| Adept | 43% | 1.5 | 0/60 |
-| Merciless | 43% | 1.5 | 0/60 |
-
-Cutting twelve boons down to two barely moved these, which is the least
-interesting result possible and worth saying plainly: the bot picks randomly
-and never touches a reserve cell, so it was never using the boons it lost.
-Adept and Merciless also sit on top of each other, though the suit ramp is
-supposed to separate them — runs end before the extra suits arrive. Both are
-arguments that the numbers describe the bot more than the game.
-
-(Measured after the stock stopped being blocked by empty columns, which lifted
-every figure a little.) The bot is much weaker than a person — a one-suit board
-is very winnable by hand — so read these as a floor, not a forecast. But the
-shape is real: under the old quota the same bot reached rank 3–4, and it now
-stalls at 1–2.
+What can be said without a bot: single-suit Spider is a game strong players win
+most of the time, and Ember is exactly that board. Sovereign is two and a half
+times its size.
 
 Two things follow, and both are yours to call:
 
-- **Transcendence is close to unreachable.** Adept Sovereign is a 117-card,
-  four-suit board where all nine sequences must go — a harder deal than
-  standard four-suit Spider, which strong players win a few percent of the
-  time. Five boons help, but not that much.
-- **Ember is a real commitment** rather than a tutorial: a full 52-card board
+- **Sovereign is a 169-card board** where all thirteen sequences must go.
+  Single-suit Spider is a game strong players win most of the time, but this
+  is two and a half times the standard deal.
+- **Ember is a real commitment** rather than a tutorial: a full two-deck board
   before you see a single boon.
 
 If either bites, the knobs are `DIFFICULTIES` (`startSets` and the `suits`
-ramp) and `rankConfig()` in `src/engine.js`. Dropping to four ranks, or holding
-Adept at two suits until Radiant, would both help a lot.
+ramp) and `rankConfig()` in `src/engine.js`. Dropping to four ranks, or a shallower
+opening deck, would both help.
 
 Known open questions:
 
-- A full Adept run is 39 sequences across six ranks, and Sovereign is a harder
-  board than standard four-suit Spider. Six ranks may want to be four.
+- A full Adept run is 63 sequences across six ranks. Six ranks may want to be
+  four.
 - With two upgrades and five picks, a run has only six possible builds. That is
   a clean decision but a shallow one; it may want a third option.
 - A tap has no way to reach a reserve cell; that is drag-only on purpose, but

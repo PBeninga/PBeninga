@@ -23,10 +23,14 @@ export const TRANSCENDENCE = { name: 'Transcendence', mark: '✧' };
 // just a quota of it. `startSets` is how many A-K sequences the first rank
 // deals; every rank after adds one more set to the deck, and all of them must
 // be bound. That is what "one more sequence each time" means in practice.
+//
+// Every card is a spade. With suits gone, the deck's depth is the only dial
+// left, so it is what the difficulties turn: Adept opens on two full decks,
+// which is the classic single-suit Spider board.
 export const DIFFICULTIES = {
-  novice: { name: 'Novice', suits: [1, 1, 1, 2, 2, 2], startSets: 3 },
-  adept: { name: 'Adept', suits: [1, 1, 2, 2, 3, 4], startSets: 4 },
-  immortal: { name: 'Merciless', suits: [1, 2, 2, 4, 4, 4], startSets: 4 },
+  novice: { name: 'Novice', startSets: 7 },
+  adept: { name: 'Adept', startSets: 8 },
+  immortal: { name: 'Merciless', startSets: 10 },
 };
 
 export const BASE_COLUMNS = 10;
@@ -71,7 +75,7 @@ export class Game {
     return {
       required: sets,            // a rank ends when the board is clear
       sets,
-      suitCount: Math.max(1, Math.min(SUITS.length, diff.suits[rank - 1])),
+      suitCount: 1,              // spades, all the way down
       columns: BASE_COLUMNS,
       wilds: this.held('talisman') * 2,
     };
