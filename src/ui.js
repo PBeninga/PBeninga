@@ -140,6 +140,21 @@ function renderTop() {
   });
 
   renderStock();
+  renderCore();
+}
+
+/**
+ * The core grows with everything the run has sealed: a speck at the first
+ * deal, most of the board by ascension.
+ */
+function renderCore() {
+  const core = $('#core');
+  if (!core) return;
+  const boardH = $('#board').clientHeight || 400;
+  const p = game.progress();
+  const size = 6 + Math.pow(p, 0.7) * boardH * 0.78;
+  core.style.setProperty('--core-size', `${Math.round(size)}px`);
+  core.style.setProperty('--core-glow', (0.34 + 0.5 * p).toFixed(2));
 }
 
 function renderStock() {
@@ -321,32 +336,138 @@ function dealAnimation(before) {
   }, fresh.length * DEAL_STAGGER_MS + DEAL_FLIGHT_MS + 60);
 }
 
+const SEAL_STAGGER_MS = 34;
+const SEAL_FLIGHT_MS = 620;
+
+function sealDuration(seals) {
+  const cards = seals.reduce((n, s) => n + s.cards.length, 0);
+  return cards * SEAL_STAGGER_MS + SEAL_FLIGHT_MS + 120;
+}
+
+/** A few motes of white dust drifting the same way the card went. */
+function spawnDust(layer, x, y, cx, cy, delay) {
+  for (let i = 0; i < 4; i++) {
+    const d = el('div', 'dust');
+    const jx = (Math.random() - 0.5) * 46;
+    const jy = (Math.random() - 0.5) * 46;
+    d.style.left = `${x + jx}px`;
+    d.style.top = `${y + jy}px`;
+    layer.appendChild(d);
+    d.animate([
+      { transform: 'translate(0,0) scale(1)', opacity: 0 },
+      { opacity: .9, offset: .18 },
+      { transform: `translate(${cx - x - jx}px, ${cy - y - jy}px) scale(.2)`, opacity: 0 },
+    ], {
+      duration: SEAL_FLIGHT_MS + 240 + Math.random() * 200,
+      delay: delay + 90 + Math.random() * 140,
+      easing: 'cubic-bezier(.4,0,.55,1)',
+      fill: 'forwards',
+    });
+  }
+}
+
+/**
+ * Draw the sealed run back where it sat, then send it down into the core,
+ * bleaching to white on the way and coming apart into dust.
+ */
+function sealAnimation(seals) {
+  if (!seals.length) return;
+  const coreEl = $('#core');
+  const core = coreEl.getBoundingClientRect();
+  const cx = core.left + core.width / 2;
+  const cy = core.top + core.height / 2;
+  const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-w'));
+  const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
+
+  const layer = el('div', 'seal-layer');
+  document.body.appendChild(layer);
+  let index = 0;
+
+  for (const seal of seals) {
+    const colEl = document.querySelector(`.col[data-col="${seal.column}"]`);
+    if (!colEl) continue;
+    const rect = colEl.getBoundingClientRect();
+    // The run sat directly below whatever is left of the column.
+    const nodes = colEl.querySelectorAll('.card');
+    const last = nodes[nodes.length - 1];
+    const col = game.state.columns[seal.column];
+    let top = 0;
+    if (last) {
+      const lastCard = col[nodes.length - 1];
+      top = parseFloat(last.style.top || 0) + (lastCard && lastCard.faceUp ? offsets.up : offsets.down);
+    }
+
+    // A thirteen-card run at full spacing hangs off the bottom of the screen,
+    // and cards nobody sees cannot be watched leaving. Squeeze it to fit.
+    const room = window.innerHeight - (rect.top + top) - h - 16;
+    const spacing = Math.max(9, Math.min(offsets.up, room / Math.max(1, seal.cards.length - 1)));
+
+    seal.cards.forEach((card, k) => {
+      const n = cardEl(card);
+      const x = rect.left;
+      const y = rect.top + top + k * spacing;
+      n.style.left = `${x}px`;
+      n.style.top = `${y}px`;
+      layer.appendChild(n);
+
+      const dx = cx - (x + w / 2);
+      const dy = cy - (y + h / 2);
+      const delay = index * SEAL_STAGGER_MS;
+      n.animate([
+        { transform: 'translate(0,0) scale(1)', opacity: 1, filter: 'brightness(1) saturate(1)' },
+        { transform: `translate(${dx * .55}px, ${dy * .55}px) scale(.72)`, opacity: .95,
+          filter: 'brightness(2.6) saturate(.15)', offset: .58 },
+        { transform: `translate(${dx}px, ${dy}px) scale(.06)`, opacity: 0,
+          filter: 'brightness(5) saturate(0)' },
+      ], { duration: SEAL_FLIGHT_MS, delay, easing: 'cubic-bezier(.42,0,.5,1)', fill: 'forwards' });
+      spawnDust(layer, x + w / 2, y + h / 2, cx, cy, delay);
+      index++;
+    });
+  }
+
+  setTimeout(() => {
+    coreEl.classList.add('flare');
+    setTimeout(() => coreEl.classList.remove('flare'), 750);
+  }, index * SEAL_STAGGER_MS + SEAL_FLIGHT_MS * .55);
+  setTimeout(() => layer.remove(), sealDuration(seals) + 400);
+}
+
 function doDeal() {
   if (!game || !game.canDeal()) return false;
   const before = new Set([...document.querySelectorAll('#board .card')].map((n) => n.dataset.id));
   if (!game.deal()) return false;
-  afterAction();
+  const seals = game.state.lastSealed || [];
+  afterAction(seals);
   dealAnimation(before);
   return true;
 }
 
 function attempt(from, to, { animate = false } = {}) {
-  const before = game.state.totalMeridians;
   const positions = animate ? snapshotPositions() : null;
   const ok = game.move(from, to);
   if (ok) {
-    if (game.state.totalMeridians > before) toast('Meridian sealed');
-    afterAction();
+    const seals = game.state.lastSealed || [];
+    if (seals.length) toast(seals.length > 1 ? `${seals.length} meridians sealed` : 'Meridian sealed');
+    afterAction(seals);
     if (positions) flyFrom(positions);
   }
   return ok;
 }
 
-function afterAction() {
+/**
+ * `seals` holds what the engine just sealed. The breakthrough screen waits for
+ * the cards to reach the core rather than cutting over the top of them.
+ */
+function afterAction(seals = []) {
   stopHint();
   markTargets(null, false);
   render();
-  checkPhase();
+  if (seals.length) {
+    sealAnimation(seals);
+    setTimeout(() => { if (game) checkPhase(); }, sealDuration(seals));
+  } else {
+    checkPhase();
+  }
 }
 
 function toast(text) {
@@ -862,7 +983,11 @@ function bindChrome() {
   $('#cells').addEventListener('pointerdown', onPointerDown);
   // Anything the player actually does dismisses a running hint.
   document.addEventListener('pointerdown', cancelHint, true);
-  const relayout = () => { if (game && $('#overlay').hidden) render(); else if (game) renderBoard(); };
+  const relayout = () => {
+    if (!game) return;
+    if ($('#overlay').hidden) render();
+    else { renderBoard(); renderCore(); }
+  };
   window.addEventListener('resize', relayout);
   window.addEventListener('orientationchange', () => setTimeout(relayout, 120));
   window.addEventListener('keydown', (e) => {

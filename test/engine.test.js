@@ -512,3 +512,39 @@ test('the deck grows only by realm and talismans', () => {
   assert.equal(cfg.wilds, 4);
   assert.equal(cfg.required, cfg.sets);
 });
+
+test('sealing records what left the board and where it sat', () => {
+  const col = [makeCard(6, 'heart', false)];
+  for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
+  const g = rigged([col, [up(1, 'club')], [up(9, 'spade')], [up(8, 'heart')]]);
+  g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
+
+  assert.equal(g.state.lastSealed.length, 1);
+  const sealed = g.state.lastSealed[0];
+  assert.equal(sealed.column, 0);
+  assert.equal(sealed.remaining, 1, 'the face-down card under the run stayed');
+  assert.equal(sealed.cards.length, 13);
+  assert.equal(sealed.cards[0].rank, 13);
+  assert.equal(sealed.cards[12].rank, 1);
+  assert.ok(sealed.cards.every((c) => c.suit === 'club'));
+});
+
+test('lastSealed is cleared by the next action', () => {
+  const g = new Game({ seed: 'SEALED' });
+  assert.deepEqual(g.state.lastSealed, []);
+  g.deal();
+  assert.deepEqual(g.state.lastSealed, []);
+});
+
+test('progress runs from nothing to one across a whole climb', () => {
+  const g = new Game({ seed: 'PROGRESS', difficulty: 'adept' });
+  assert.equal(g.totalSequences(), 4 + 5 + 6 + 7 + 8 + 9);
+  assert.equal(g.progress(), 0);
+  g.state.totalMeridians = g.totalSequences();
+  assert.equal(g.progress(), 1);
+  g.state.totalMeridians = 999;
+  assert.equal(g.progress(), 1, 'and never past it');
+
+  const novice = new Game({ seed: 'PROGRESS', difficulty: 'novice' });
+  assert.equal(novice.totalSequences(), 3 + 4 + 5 + 6 + 7 + 8);
+});

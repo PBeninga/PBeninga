@@ -137,9 +137,51 @@ body {
 .cell.filled { border-style: solid; }
 .cell .mini { font-size: 15px; }
 
+/* ------------------------------------------------------------------- core */
+
+/* A speck at the start of a run, most of the screen by the end. Everything the
+   climb has sealed is in here. */
+#core {
+  position: absolute; left: 50%; top: 58%; z-index: 0;
+  width: var(--core-size, 6px); height: var(--core-size, 6px);
+  margin-left: calc(var(--core-size, 6px) / -2);
+  margin-top: calc(var(--core-size, 6px) / -2);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: var(--core-glow, .5);
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.95) 0%,
+      rgba(190,255,232,.75) 14%,
+      rgba(85,214,168,.42) 34%,
+      rgba(60,170,140,.16) 58%,
+      transparent 78%);
+  filter: blur(calc(var(--core-size, 6px) * .045));
+  transition: width .7s ease, height .7s ease, margin .7s ease, opacity .7s ease;
+  animation: core-breathe 6.5s ease-in-out infinite;
+}
+@keyframes core-breathe {
+  50% { transform: scale(1.06); }
+}
+#core.flare { animation: core-flare .7s ease-out; }
+@keyframes core-flare {
+  0% { transform: scale(1); filter: blur(calc(var(--core-size, 6px) * .045)) brightness(1); }
+  22% { transform: scale(1.28); filter: blur(calc(var(--core-size, 6px) * .02)) brightness(2.1); }
+  100% { transform: scale(1); filter: blur(calc(var(--core-size, 6px) * .045)) brightness(1); }
+}
+
+/* Cards on their way into the core, and the dust they come apart into. */
+.seal-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+.seal-layer .card { position: absolute; }
+.dust {
+  position: absolute; width: 5px; height: 5px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(210,255,240,.85) 45%, transparent 72%);
+}
+
 /* ------------------------------------------------------------------ board */
 
 #board {
+  position: relative; z-index: 1;
   flex: 1; display: flex; gap: var(--gap, 9px);
   padding: 16px 16px 10px; overflow: hidden; align-items: stretch;
   justify-content: center;

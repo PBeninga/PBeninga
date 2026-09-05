@@ -508,6 +508,48 @@ for (const view of VIEWS) {
     if (r.filter === 'none') throw new Error('the dim class has no visual effect');
   });
 
+  await check('a sealed run is drawn into the core, and the core grows', async () => {
+    await hintOff(page);
+    await stash(page);
+    const start = await page.evaluate(() => {
+      const N = window.NineMeridians, g = N.game;
+      const col = [];
+      for (let r = 13; r >= 2; r--) col.push({ id: 9100 + r, rank: r, suit: 'spade', faceUp: true, wild: false });
+      g.state.columns[4] = col;
+      g.state.columns[5] = [{ id: 9099, rank: 1, suit: 'spade', faceUp: true, wild: false }];
+      N.render();
+      return { core: document.querySelector('#core').getBoundingClientRect().width,
+        meridians: g.state.totalMeridians };
+    });
+
+    const card = await page.locator('.card[data-col="5"][data-idx="0"]').boundingBox();
+    await page.mouse.click(card.x + card.width / 2, card.y + 10);
+    await page.waitForTimeout(320);
+
+    const mid = await page.evaluate(() => ({
+      cards: document.querySelectorAll('.seal-layer .card').length,
+      dust: document.querySelectorAll('.seal-layer .dust').length,
+      onScreen: [...document.querySelectorAll('.seal-layer .card')]
+        .filter((n) => n.getBoundingClientRect().top < window.innerHeight).length,
+      sealed: window.NineMeridians.game.state.totalMeridians,
+    }));
+    if (mid.sealed <= start.meridians) throw new Error('nothing sealed');
+    if (mid.cards !== 13) throw new Error(`${mid.cards} cards drawn for a thirteen-card run`);
+    if (!mid.dust) throw new Error('the cards did not come apart into dust');
+    if (mid.onScreen !== 13) throw new Error(`${13 - mid.onScreen} of the run sat off screen`);
+
+    await page.waitForTimeout(1700);
+    const done = await page.evaluate(() => ({
+      layers: document.querySelectorAll('.seal-layer').length,
+      core: document.querySelector('#core').getBoundingClientRect().width,
+      progress: window.NineMeridians.game.progress(),
+    }));
+    if (done.layers) throw new Error('the absorption left a layer behind');
+    if (!(done.progress > 0)) throw new Error('progress did not move');
+    if (done.core <= start.core) throw new Error(`the core did not grow (${start.core} -> ${done.core})`);
+    await unstash(page);
+  });
+
   await check('the Paths button lists the boons walked', async () => {
     await hintOff(page);
     await stash(page);

@@ -52,6 +52,7 @@ export class Game {
       undosLeft: UNDOS_PER_REALM,
       moves: 0,
       offer: [],
+      lastSealed: [],
       log: [],
     };
     this.dealRealm(1);
@@ -245,6 +246,8 @@ export class Game {
   /** Flip exposed cards, seal finished meridians, then check win/loss. */
   settle() {
     const s = this.state;
+    // What was sealed this turn, so the interface can show it leaving.
+    s.lastSealed = [];
     let changed = true;
     while (changed) {
       changed = false;
@@ -257,6 +260,11 @@ export class Game {
         const done = completedMeridian(col);
         if (done) {
           col.length -= SEQUENCE_LENGTH;
+          s.lastSealed.push({
+            column: i,
+            remaining: col.length,
+            cards: done.cards.map((c) => ({ ...c })),
+          });
           s.meridians++;
           s.totalMeridians++;
           s.collected.push({ suit: done.suit || 'wild', realm: s.realm });
@@ -454,6 +462,19 @@ export class Game {
     if (intoEmpty.length) return { kind: 'empty', moves: intoEmpty };
     if (this.canDeal()) return { kind: 'deal', moves: [] };
     return { kind: 'over', moves: [] };
+  }
+
+  /** Every sequence a full run would have to seal, across all six realms. */
+  totalSequences() {
+    const diff = DIFFICULTIES[this.difficulty];
+    let n = 0;
+    for (let r = 1; r <= REALMS.length; r++) n += diff.startSets + (r - 1);
+    return n;
+  }
+
+  /** How far through the whole climb, 0 to 1. Drives the core's growth. */
+  progress() {
+    return Math.min(1, this.state.totalMeridians / this.totalSequences());
   }
 
   score() {

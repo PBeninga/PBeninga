@@ -74,6 +74,12 @@ the tableau, and a toolbar of **Menu · Boons · Deal · Hint · Undo** across t
 bottom. The status line floats just above the toolbar and costs no board
 height when it has nothing to say.
 
+Behind the tableau sits **the core**: a speck of light at the first deal that
+grows with everything the run has sealed, until by the last realm it is a glow
+across most of the board. Sealing a meridian sends its thirteen cards down into
+it — bleaching white on the way, coming apart into dust, and absorbed. The
+breakthrough screen waits for them to arrive rather than cutting over the top.
+
 **Tap a card and it goes** — it slides to its new column over half a second
 rather than teleporting. **Dealing** throws the new row out of the stock one
 card at a time, about 40ms apart, so you can see where it lands. A tap plays it straight to whichever column builds
@@ -198,7 +204,6 @@ Known open questions:
   board than standard four-suit Spider. Six realms may want to be four.
 - With two upgrades and five picks, a run has only six possible builds. That is
   a clean decision but a shallow one; it may want a third option.
-- Sealing a meridian has no animation yet, just a toast.
 - A tap has no way to reach a reserve cell; that is drag-only on purpose, but
   it may want a gesture of its own.
 - Talismans are invisible until flipped, so their value is felt rather than
