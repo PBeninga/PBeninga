@@ -10,9 +10,12 @@ are the only thing that closes that gap.
 No dependencies, no build step. Open `index.html` in a browser and play.
 
 ```
-npm test      # 41 rule tests (node:test, no deps)
-npm run build # inline everything into dist/index.html
-npm run serve # http://localhost:8000
+npm test          # 41 rule tests (node:test, no deps)
+npm run build     # inline everything into dist/index.html
+npm run serve     # http://localhost:8000
+
+npm run test:browser   # end-to-end checks in Chromium, desktop + 4 devices
+                       # (needs `npm i -D playwright`; skips cleanly without it)
 ```
 
 ---
@@ -73,6 +76,34 @@ The paths pull against each other. Expansion III lets you deal over empty
 columns — which matters precisely because Expansion II hands you an empty
 column every realm and the base rule forbids dealing while one exists.
 
+## On phones
+
+Ten columns on a 390px screen is the hard constraint, so the phone layout is
+built around it rather than against it.
+
+- Cards shrink to fit all ten columns — never a sideways scroll — and below
+  54px they drop the centre pip so the corner rank can grow into the space.
+  The exposed sliver of a stacked card grows to match, so a buried rank stays
+  readable.
+- The board claims every touch gesture over it (`touch-action: none`), so a
+  drag is never stolen by the page trying to scroll. A dragged stack floats
+  above the fingertip instead of hiding under it, and the drop lands where the
+  cards are, not where the finger is.
+- Tap to pick up, tap to place. **Double-tap** auto-moves — detected from the
+  taps themselves, since `dblclick` is not dependable once touch gestures are
+  claimed. A cancelled gesture (an incoming call, a system swipe) puts the
+  cards back rather than leaving them floating.
+- The HUD collapses to two short rows; boons fold into one chip that opens the
+  full list. Controls stay at least 40px tall.
+- Landscape gets nearly double the card size and a single-line HUD.
+- Overlays are laid out three ways — full cards on desktop, compact rows in
+  portrait, three abreast in landscape — because at 342px tall a stacked offer
+  pushed the third choice off screen where nobody would find it.
+
+`test/browser.mjs` asserts all of this on iPhone portrait and landscape,
+Pixel 7 and iPad Mini: no overflow, real touch drags, tap targets, and every
+overlay fitting its viewport without scrolling.
+
 ## Layout
 
 ```
@@ -84,7 +115,8 @@ src/engine.js     realms, boons, stock, undo, deadlock detection — no DOM
 src/ui.js         rendering, drag and drop, overlays — no rules
 src/style.css     ink-wash dark theme
 build.js          inlines the above into dist/index.html
-test/             node:test suites for cards and engine
+test/*.test.js    node:test suites for cards and engine
+test/browser.mjs  Chromium end-to-end checks across desktop and four devices
 ```
 
 The engine never touches the DOM and the UI never encodes a rule, so the whole

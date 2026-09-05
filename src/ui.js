@@ -10,6 +10,9 @@ const SAVE_KEY = 'nine-meridians/run';
 const BEST_KEY = 'nine-meridians/best';
 
 const $ = (sel) => document.querySelector(sel);
+// "Narrow" covers both a phone held upright and one held sideways: either way
+// there is no room for the full rules or a row of boon names.
+const isNarrow = () => window.innerWidth < 620 || window.innerHeight < 520;
 const el = (tag, cls, html) => {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -22,7 +25,11 @@ let selection = null;        // {zone:'col'|'reserve', index, count}
 let armed = null;            // 'void' | 'transmute' | 'awaken'
 let pendingTransmute = null;
 let drag = null;
+let lastTap = null;
 let lastSeen = { meridians: 0 };
+
+// How far above the fingertip a dragged stack floats, so it stays visible.
+const TOUCH_LIFT = 38;
 
 // ------------------------------------------------------------------ cards
 
@@ -56,15 +63,17 @@ function measure() {
   const board = $('#board');
   const cols = game.state.columns.length;
   const narrow = board.clientWidth < 620;
-  const gap = (cols > 11 ? 6 : 9) - (narrow ? 4 : 0);
-  const padX = narrow ? 12 : 32;
+  const gap = narrow ? 3 : (cols > 11 ? 6 : 9);
+  const padX = narrow ? 10 : 32;
   const avail = board.clientWidth - padX - gap * (cols - 1);
   // Fit the width, but never let a card grow so tall that a column of five
   // cannot breathe.
   const byWidth = Math.floor(avail / cols);
   const byHeight = Math.floor((board.clientHeight - 20) * 0.34 / 1.4);
-  const w = Math.max(narrow ? 32 : 40, Math.min(124, byWidth, byHeight));
-  const h = Math.round(w * 1.4);
+  const w = Math.max(narrow ? 30 : 40, Math.min(124, byWidth, byHeight));
+  const h = Math.round(w * (narrow ? 1.34 : 1.4));
+  // Small cards drop their centre pip and grow the corner instead.
+  document.body.classList.toggle('compact-cards', w < 54);
   document.documentElement.style.setProperty('--card-w', w + 'px');
   document.documentElement.style.setProperty('--card-h', h + 'px');
   board.style.setProperty('--gap', gap + 'px');
@@ -75,13 +84,15 @@ function measure() {
   const tight = needed > board.clientWidth;
   board.style.justifyContent = tight ? 'flex-start' : 'center';
   board.style.overflowX = tight ? 'auto' : 'hidden';
-  return { w, h, boardH: board.clientHeight - 20 };
+  return { w, h, compact: w < 54, boardH: board.clientHeight - 20 };
 }
 
 /** Stack offsets, squeezed uniformly so the tallest column still fits. */
-function offsetsFor(columns, h, boardH) {
-  const upGap = h * 0.30;
-  const downGap = h * 0.15;
+function offsetsFor(columns, h, boardH, compact) {
+  // A compact card carries its rank in the top-left corner only, so the sliver
+  // left visible has to be tall enough to show it.
+  const upGap = h * (compact ? 0.36 : 0.30);
+  const downGap = h * (compact ? 0.13 : 0.15);
   let scale = 1;
   for (const col of columns) {
     let need = 0;
@@ -118,12 +129,21 @@ function renderHud() {
 
   const chips = $('#boon-chips');
   chips.innerHTML = '';
-  for (const [key, tier] of Object.entries(s.boons)) {
-    const path = PATH_BY_KEY[key];
-    chips.appendChild(el('span', 'chip',
-      `${path.hanzi} <b>${path.tiers[tier - 1].name}</b>`));
+  const taken = Object.entries(s.boons);
+  // On a phone a row of full boon names costs more screen than it is worth;
+  // collapse to a tap that opens the same list in the pause panel.
+  if (isNarrow() && taken.length + (s.fortune ? 1 : 0) > 1) {
+    const chip = el('span', 'chip', `☯ <b>${taken.length + (s.fortune ? 1 : 0)} boons</b>`);
+    chip.style.cursor = 'pointer';
+    chip.onclick = pauseScreen;
+    chips.appendChild(chip);
+  } else {
+    for (const [key, tier] of taken) {
+      const path = PATH_BY_KEY[key];
+      chips.appendChild(el('span', 'chip', `${path.hanzi} <b>${path.tiers[tier - 1].name}</b>`));
+    }
+    if (s.fortune) chips.appendChild(el('span', 'chip', `天緣 <b>Fortune ×${s.fortune}</b>`));
   }
-  if (s.fortune) chips.appendChild(el('span', 'chip', `天緣 <b>Fortune ×${s.fortune}</b>`));
 
   const stock = $('#stock');
   stock.textContent = s.stock.length;
@@ -165,9 +185,9 @@ function chargeButton(sel, mode, count, label) {
 
 function renderBoard() {
   const board = $('#board');
-  const { h, boardH } = measure();
+  const { h, boardH, compact } = measure();
   const cols = game.state.columns;
-  const off = offsetsFor(cols, h, boardH);
+  const off = offsetsFor(cols, h, boardH, compact);
 
   board.innerHTML = '';
   cols.forEach((col, ci) => {
@@ -300,9 +320,11 @@ function onPointerDown(ev) {
   drag = {
     zone: 'col', index: col, count, active: false,
     startX: ev.clientX, startY: ev.clientY, grabbable, node,
+    touch: ev.pointerType === 'touch', idx,
   };
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp, { once: true });
+  window.addEventListener('pointercancel', onPointerCancel, { once: true });
 }
 
 function onPointerMove(ev) {
@@ -310,7 +332,7 @@ function onPointerMove(ev) {
   const dx = ev.clientX - drag.startX;
   const dy = ev.clientY - drag.startY;
   if (!drag.active) {
-    if (Math.hypot(dx, dy) < 7 || !drag.grabbable) return;
+    if (Math.hypot(dx, dy) < (drag.touch ? 10 : 7) || !drag.grabbable) return;
     startDrag(ev);
   }
   positionDrag(ev);
@@ -323,12 +345,13 @@ function startDrag(ev) {
   drag.run = run;
   const rect = drag.node.getBoundingClientRect();
   drag.dx = ev.clientX - rect.left;
-  drag.dy = ev.clientY - rect.top;
+  drag.dy = ev.clientY - rect.top + (drag.touch ? TOUCH_LIFT : 0);
   const layer = el('div', 'drag-layer');
   const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
+  drag.stackGap = h * (document.body.classList.contains('compact-cards') ? 0.36 : 0.30);
   run.forEach((card, i) => {
     const n = cardEl(card);
-    n.style.top = i * h * 0.30 + 'px';
+    n.style.top = i * drag.stackGap + 'px';
     layer.appendChild(n);
   });
   drag.layer = layer;
@@ -343,20 +366,27 @@ function positionDrag(ev) {
   for (const n of drag.layer.children) {
     n.style.left = ev.clientX - drag.dx + 'px';
   }
-  const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
   [...drag.layer.children].forEach((n, i) => {
-    n.style.top = ev.clientY - drag.dy + i * h * 0.30 + 'px';
+    n.style.top = ev.clientY - drag.dy + i * drag.stackGap + 'px';
   });
+}
+
+function onPointerCancel() {
+  window.removeEventListener('pointermove', onPointerMove);
+  if (drag && drag.active) drag.layer.remove();
+  drag = null;
+  afterAction();
 }
 
 function onPointerUp(ev) {
   window.removeEventListener('pointermove', onPointerMove);
+  window.removeEventListener('pointercancel', onPointerCancel);
   if (!drag) return;
   const d = drag;
   if (d.active) {
     d.layer.remove();
     drag = null;
-    const under = document.elementFromPoint(ev.clientX, ev.clientY);
+    const under = document.elementFromPoint(ev.clientX, ev.clientY - (d.touch ? TOUCH_LIFT : 0));
     const cell = under && under.closest('.cell');
     const colEl = under && under.closest('.col');
     if (cell) attempt({ zone: 'col', index: d.index, count: d.count }, { zone: 'reserve', index: Number(cell.dataset.cell) });
@@ -366,6 +396,22 @@ function onPointerUp(ev) {
     return;
   }
   drag = null;
+  // Touch has no dblclick worth trusting once touch-action is off, so pair up
+  // two quick taps on the same card ourselves.
+  if (d.touch) {
+    const now = Date.now();
+    const same = lastTap && lastTap.col === d.index && lastTap.idx === d.idx
+      && now - lastTap.at < 320;
+    lastTap = { col: d.index, idx: d.idx, at: now };
+    if (same) {
+      lastTap = null;
+      const target = game.autoTarget(d.index, d.count);
+      if (target !== null) {
+        selection = null;
+        return void attempt({ zone: 'col', index: d.index, count: d.count }, { zone: 'col', index: target });
+      }
+    }
+  }
   onCardTap(d.index, d.count, d.grabbable);
 }
 
@@ -458,7 +504,9 @@ function openSuitPicker(ref) {
 }
 
 function rulesHtml() {
-  return `<div class="rules">
+  return `<details class="rules-toggle"${isNarrow() ? '' : ' open'}>
+    <summary>How to play</summary>
+    <div class="rules">
       <h3>The Tableau</h3>
       <ul>
         <li>Build <b>down by rank</b> onto any card — suit does not matter while stacking.</li>
@@ -478,8 +526,11 @@ function rulesHtml() {
         <li><b>Talismans</b> (☯) stand in for any rank and suit, in a stack or inside a sealed meridian.</li>
         <li><b>Void Step</b>, <b>Transmute</b> and <b>Awaken</b> are charges: arm the button, then click a card.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>Esc</b> clears a selection.</li>
+        <li>On a touchscreen: drag a card, or tap to pick up and tap to place.
+        <b>Double-tap</b> sends it to its best home.</li>
       </ul>
-    </div>`;
+    </div>
+  </details>`;
 }
 
 function pauseScreen() {
@@ -487,6 +538,13 @@ function pauseScreen() {
   p.appendChild(el('div', 'hanzi-big', '靜坐'));
   p.appendChild(el('h2', '', 'Meditation'));
   p.appendChild(el('p', '', 'The climb waits.'));
+  const taken = Object.entries(game.state.boons);
+  if (taken.length || game.state.fortune) {
+    const list = taken
+      .map(([k, t]) => `<b style="color:var(--gold)">${PATH_BY_KEY[k].hanzi} ${PATH_BY_KEY[k].tiers[t - 1].name}</b>`)
+      .concat(game.state.fortune ? [`<b style="color:var(--gold)">天緣 Fortune ×${game.state.fortune}</b>`] : []);
+    p.appendChild(el('p', '', 'Boons held: ' + list.join(' · ')));
+  }
   const row = el('div');
   const resume = el('button', 'big', 'Resume');
   resume.onclick = () => { closeOverlay(); render(); };
@@ -670,7 +728,9 @@ function bindChrome() {
   $('#board').addEventListener('pointerdown', onPointerDown);
   $('#board').addEventListener('dblclick', onDoubleClick);
   $('#cells').addEventListener('pointerdown', onPointerDown);
-  window.addEventListener('resize', () => { if (game) renderBoard(); });
+  const relayout = () => { if (game && $('#overlay').hidden) render(); else if (game) renderBoard(); };
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', () => setTimeout(relayout, 120));
   window.addEventListener('keydown', (e) => {
     if (!game || game.state.phase !== 'play') return;
     if (e.key === 'Escape') { selection = null; armed = null; markTargets(null, false); render(); }

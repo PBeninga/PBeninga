@@ -36,9 +36,16 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* Kill the 300ms tap delay and double-tap zoom; pinch zoom still works. */
+  touch-action: manipulation;
+  overscroll-behavior: none;
 }
 
 #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+/* The board owns every touch gesture over it, so a drag is never stolen by
+   the page trying to scroll. */
+#board, .card, .cell, .stock { touch-action: none; }
 
 /* ------------------------------------------------------------------ HUD */
 
@@ -47,6 +54,9 @@ body {
   align-items: center;
   gap: 18px;
   padding: 10px 16px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
   border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(20,32,41,.9), rgba(8,12,17,.6));
   flex-wrap: wrap;
@@ -194,13 +204,24 @@ button .count { color: var(--gold); font-size: 11px; }
   to { transform: translateY(-26px) scale(.72); opacity: 0; filter: brightness(2.2); }
 }
 
+/* Below ~54px a card cannot carry two glyphs. Drop the centre pip and let the
+   corner grow into the space, which is what small-screen solitaire needs. */
+body.compact-cards .card .center { display: none; }
+body.compact-cards .card .corner {
+  flex-direction: row; align-items: baseline; gap: 1px;
+  top: 2px; left: 3px; font-size: calc(var(--card-w) * .46);
+}
+body.compact-cards .card .corner .s { font-size: calc(var(--card-w) * .40); }
+body.compact-cards .card.wild .corner { font-size: calc(var(--card-w) * .5); }
+body.compact-cards .card.down::after { font-size: calc(var(--card-w) * .3); top: 1px; }
+
 .drag-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
 .drag-layer .card { position: absolute; transition: none; box-shadow: 0 12px 26px rgba(0,0,0,.7); }
 
 /* ---------------------------------------------------------------- ticker */
 
 #ticker {
-  padding: 5px 16px 9px; font-size: 12px; color: var(--text-dim);
+  padding: 5px 16px max(9px, env(safe-area-inset-bottom)); font-size: 12px; color: var(--text-dim);
   display: flex; gap: 16px; align-items: center; min-height: 26px;
 }
 #ticker .warn { color: var(--gold); }
@@ -271,6 +292,82 @@ button .count { color: var(--gold); font-size: 11px; }
 .hud-right { display: flex; align-items: center; gap: 8px; margin-left: auto;
   flex-wrap: wrap; justify-content: flex-end; }
 
+/* On a phone the three boons become compact rows -- stacked portrait cards
+   pushed the third choice below the fold, where it went unseen. */
+@media (max-width: 760px) {
+  .offer { flex-direction: column; align-items: center; gap: 8px; margin: 16px 0; }
+  .boon {
+    width: 100%; max-width: 430px; padding: 11px 13px;
+    display: grid; grid-template-columns: 44px 1fr; column-gap: 12px;
+    text-align: left;
+  }
+  .boon:hover { transform: none; }
+  .boon .hanzi {
+    grid-column: 1; grid-row: 1 / -1; align-self: center;
+    font-size: 19px; letter-spacing: 0; line-height: 1.2; text-align: center;
+  }
+  .boon .path { grid-column: 2; font-size: 9px; margin: 0; }
+  .boon .name { grid-column: 2; font-size: 15px; margin: 1px 0 3px; }
+  .boon .desc { grid-column: 2; font-size: 12px; line-height: 1.42; }
+  .boon .tier { grid-column: 2; font-size: 9px; margin-top: 4px; }
+
+  .panel h1 { font-size: 24px; letter-spacing: .1em; }
+  .panel h2 { font-size: 19px; }
+  .panel .hanzi-big { font-size: 34px; letter-spacing: .2em; margin-bottom: 0; }
+  .panel p { font-size: 13px; margin: 6px auto; }
+  .panel .lead { font-size: 13.5px; }
+  .panel .setup { gap: 12px; margin: 16px 0; }
+  .field input, .field select { min-width: 140px; }
+  .tally { gap: 18px; margin: 16px 0; }
+  .tally .n { font-size: 22px; }
+  .big { padding: 11px 24px; font-size: 15px; }
+  #overlay { padding: 16px 14px; }
+  details.rules-toggle { margin-top: 16px; }
+}
+
+details.rules-toggle > summary {
+  cursor: pointer; list-style: none; color: var(--jade);
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  padding: 9px 0; border-top: 1px solid var(--line);
+}
+details.rules-toggle > summary::-webkit-details-marker { display: none; }
+details.rules-toggle > summary::after { content: ' ▾'; }
+details.rules-toggle[open] > summary::after { content: ' ▴'; }
+
+/* Phone landscape: almost no vertical room, so the HUD collapses to one line
+   and every overlay tightens up -- at 390px tall the boon offer clipped. */
+@media (max-height: 470px) and (orientation: landscape) {
+  #overlay { padding: 10px 14px; }
+  .panel .hanzi-big { font-size: 26px; margin-bottom: 0; letter-spacing: .2em; }
+  .panel h1 { font-size: 20px; letter-spacing: .1em; }
+  .panel h2 { font-size: 16px; margin-bottom: 2px; }
+  .panel p { font-size: 12px; margin: 4px auto; }
+  .panel .lead { font-size: 12.5px; }
+  /* Undo the portrait row-card layout: sideways there is width for three
+     cards abreast but almost no height to stack them. */
+  .offer { flex-direction: row; flex-wrap: nowrap; gap: 10px; margin: 12px 0; }
+  .boon { display: block; text-align: center; width: 215px; padding: 10px 12px; }
+  .boon .hanzi { font-size: 20px; letter-spacing: .2em; }
+  .boon .path { font-size: 9px; margin-top: 5px; }
+  .boon .name { font-size: 14px; margin: 3px 0 5px; }
+  .boon .desc { font-size: 11.5px; line-height: 1.4; }
+  .boon .tier { font-size: 9px; margin-top: 6px; }
+  .setup { margin: 12px 0; gap: 12px; }
+  .tally { gap: 16px; margin: 12px 0; }
+  .tally .n { font-size: 20px; }
+  .big { padding: 8px 20px; font-size: 14px; }
+  details.rules-toggle { margin-top: 10px; }
+  .suit-picker button { font-size: 20px; padding: 7px 13px; }
+  .hud { padding: 3px 8px; gap: 6px; }
+  .realm-seal { width: 26px; height: 26px; font-size: 11px; }
+  .realm-sub, .tray-label, .meridian-label { display: none; }
+  .realm-name { font-size: 12px; }
+  .boon-chips { order: 0; width: auto; }
+  button { padding: 3px 9px; font-size: 11px; min-height: 32px; }
+  .stock, .cell { width: 30px; height: 38px; font-size: 11px; }
+  #ticker { display: none; }
+}
+
 @media (max-width: 760px) {
   .hud { gap: 7px; padding: 6px 8px; }
   .tray-label { display: none; }
@@ -282,10 +379,9 @@ button .count { color: var(--gold); font-size: 11px; }
   .pip { width: 10px; height: 10px; }
   .boon-chips { order: 9; width: 100%; gap: 4px; }
   .chip { font-size: 10px; padding: 2px 6px; }
-  button { padding: 4px 8px; font-size: 12px; }
-  .stock, .cell { width: 30px; height: 42px; font-size: 11px; }
-  .panel h1 { font-size: 30px; }
-  .panel .hanzi-big { font-size: 44px; }
-  .boon { width: 100%; max-width: 330px; padding: 14px; }
-  #ticker { font-size: 11px; padding: 4px 8px 7px; gap: 8px; }
+  /* Touch targets: comfortably tappable without a second HUD row. */
+  button { padding: 6px 11px; font-size: 12px; min-height: 40px; }
+  .stock, .cell { width: 36px; height: 46px; font-size: 12px; }
+  #ticker { font-size: 11px; padding: 4px 8px max(7px, env(safe-area-inset-bottom)); gap: 8px; }
+  #ticker .warn { font-size: 10.5px; }
 }
