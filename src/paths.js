@@ -55,7 +55,7 @@ export const FORTUNE = {
   key: 'fortune',
   name: 'Heavenly Fortune',
   hanzi: '天緣',
-  desc: 'The next realm demands one fewer meridian (never below one).',
+  desc: 'You may break through one sequence short of a cleared board.',
 };
 
 /** Boons on offer at a breakthrough: the next unclaimed tier of three paths. */

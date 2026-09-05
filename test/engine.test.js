@@ -16,10 +16,11 @@ function rigged(columns, patch = {}) {
   return g;
 }
 
-test('a new run starts in the first realm needing one meridian', () => {
-  const g = new Game({ seed: 'ABC' });
+test('a realm is a whole game: the quota is every sequence in the deck', () => {
+  const g = new Game({ seed: 'ABC', difficulty: 'adept' });
   assert.equal(g.state.realm, 1);
-  assert.equal(g.state.required, 1);
+  assert.equal(g.state.required, DIFFICULTIES.adept.startSets);
+  assert.equal(g.realmConfig(1).sets, g.state.required, 'nothing may be left on the table');
   assert.equal(g.state.phase, 'play');
   assert.equal(g.state.columns.length, BASE_COLUMNS);
 });
@@ -99,25 +100,37 @@ test('completing K-A seals a meridian and clears the column', () => {
   assert.equal(g.state.columns[0][0].faceUp, true);
 });
 
-test('sealing the required meridian triggers a breakthrough with three boons', () => {
+test('one sequence is not a breakthrough -- the board has to be cleared', () => {
   const col = [];
   for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
-  const g = rigged([col, [up(1, 'club')]]);
+  // Leave a legal move on the board, or the run ends for want of one.
+  const g = rigged([col, [up(1, 'club')], [up(9, 'spade')], [up(8, 'heart')]]);
+  assert.equal(g.state.required, DIFFICULTIES.adept.startSets);
+  g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
+  assert.equal(g.state.totalMeridians, 1);
+  assert.equal(g.state.phase, 'play', 'no upgrade after the first K-A');
+  assert.deepEqual(g.state.offer, []);
+});
+
+test('clearing the last sequence triggers a breakthrough with three boons', () => {
+  const col = [];
+  for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
+  const g = rigged([col, [up(1, 'club')]], { required: 1 });
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
   assert.equal(g.state.phase, 'breakthrough');
   assert.equal(g.state.offer.length, 3);
   assert.equal(new Set(g.state.offer.map((o) => o.key)).size, 3);
 });
 
-test('choosing a boon opens the next realm and raises the demand', () => {
+test('choosing a boon opens the next realm, one sequence larger', () => {
   const col = [];
   for (let r = 13; r >= 2; r--) col.push(up(r, 'club'));
-  const g = rigged([col, [up(1, 'club')]]);
+  const g = rigged([col, [up(1, 'club')]], { required: 1 });
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
   const boon = g.state.offer[0];
   g.chooseBoon(0);
   assert.equal(g.state.realm, 2);
-  assert.equal(g.state.required, 2);
+  assert.equal(g.state.required, DIFFICULTIES.adept.startSets + 1);
   assert.equal(g.state.meridians, 0);
   assert.equal(g.state.phase, 'play');
   if (boon.type === 'path') assert.equal(g.state.boons[boon.key], boon.tier);
@@ -266,7 +279,18 @@ test('a full run of every realm is reachable with the right cards', () => {
     }
   }
   assert.equal(g.state.phase, 'ascended');
-  assert.equal(g.state.totalMeridians, 1 + 2 + 3 + 4 + 5 + 6);
+  const start = DIFFICULTIES.adept.startSets;
+  let expected = 0;
+  for (let r = 0; r < REALMS.length; r++) expected += start + r;
+  assert.equal(g.state.totalMeridians, expected);
+});
+
+test('Fortune is the only way to leave a sequence behind', () => {
+  const g = new Game({ seed: 'FORTUNE', difficulty: 'adept' });
+  const full = g.realmConfig(2).required;
+  g.state.fortune = 1;
+  assert.equal(g.realmConfig(2).required, full - 1);
+  assert.equal(g.realmConfig(2).sets, full, 'the deck is unchanged; the demand is not');
 });
 
 test('tapping sends a card where it builds the longest run', () => {

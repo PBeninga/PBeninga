@@ -2,10 +2,11 @@
 
 A cultivation roguelike played in Spider solitaire.
 
-Sealing a complete **K→A run of one suit** is a cultivation breakthrough. Break
-through and you choose a boon — but the next realm demands *one more sequence
-than the last*. Realm 1 asks for one. Realm 6 asks for six. The paths you walk
-are the only thing that closes that gap.
+Clearing a whole board of **K→A runs** is a cultivation breakthrough. Break
+through and you choose a boon — but the next realm deals *one more sequence
+than the last*, and every one of them has to go. Realm 1 is a 52-card game.
+Realm 6 is a 117-card, four-suit game. The paths you walk are the only thing
+that closes that gap.
 
 No dependencies, no build step. Open `index.html` in a browser and play.
 
@@ -22,26 +23,30 @@ npm run test:browser   # end-to-end checks in Chromium, desktop + 4 devices
 
 ## The loop
 
-**Realm → seal the quota → breakthrough → choose a path → a bigger tableau.**
+**Clear the whole board → break through → choose a path → a bigger board.**
 
-| Realm | 境界 | Meridians demanded | Suits (Adept) |
-|---|---|---|---|
-| 1 | 練氣 Qi Condensation | 1 | 1 |
-| 2 | 築基 Foundation Establishment | 2 | 1 |
-| 3 | 結丹 Core Formation | 3 | 2 |
-| 4 | 元嬰 Nascent Soul | 4 | 2 |
-| 5 | 化神 Spirit Severing | 5 | 3 |
-| 6 | 問道 Dao Seeking | 6 | 4 |
-| — | 飛昇 Immortal Ascension | *you win* | — |
+A realm is a complete game of solitaire, not a quota: every sequence in the
+deck has to be sealed before you break through. Finishing the first K→A of a
+realm is progress, not a level-up. Each realm then deals **one more sequence
+than the last**, and all of them must go.
 
-Each realm deals a fresh tableau of `demanded + 3` full A–K sets, so the deck
-grows with the demand and you always have a few sets of slack. Five
-breakthroughs means **five boons out of twelve** in a full run — the choices
-are what make one climb differ from the next.
+| Realm | 境界 | Sequences to clear | Cards | Suits (Adept) |
+|---|---|---|---|---|
+| 1 | 練氣 Qi Condensation | 4 | 52 | 1 |
+| 2 | 築基 Foundation Establishment | 5 | 65 | 1 |
+| 3 | 結丹 Core Formation | 6 | 78 | 2 |
+| 4 | 元嬰 Nascent Soul | 7 | 91 | 2 |
+| 5 | 化神 Spirit Severing | 8 | 104 | 3 |
+| 6 | 問道 Dao Seeking | 9 | 117 | 4 |
+| — | 飛昇 Immortal Ascension | *you win* | — | — |
 
-Three difficulties change the suit ramp and the slack: **Novice** (suits
-1‑1‑1‑2‑2‑2, four spare sets), **Adept** (1‑1‑2‑2‑3‑4, three), **Immortal**
-(1‑2‑2‑4‑4‑4, two).
+Five breakthroughs means **five boons out of twelve** in a full run — the
+choices are what make one climb differ from the next, and by the last realm
+you are playing a bigger, four-suit board than standard Spider deals.
+
+Three difficulties change the starting deck and the suit ramp: **Novice**
+(3 sequences up to 8, suits 1‑1‑1‑2‑2‑2), **Adept** (4 up to 9,
+suits 1‑1‑2‑2‑3‑4), **Immortal** (4 up to 9, suits 1‑2‑2‑4‑4‑4).
 
 ## Solitaire rules
 
@@ -59,10 +64,15 @@ Standard Spider, with two additions.
 
 ## Playing
 
-**Tap a card and it goes.** A tap plays it straight to whichever column builds
+**Tap a card and it goes** — it slides to its new column over half a second
+rather than teleporting. A tap plays it straight to whichever column builds
 the longest sequence — the same ranking the hint carousel uses, so a tap is
 always the move a hint would recommend for that card. Drag instead when you
 want a say in the destination, or to park a card in a reserve cell.
+
+Cards you cannot lift yet — face-up but pinned under a run that has to move
+first — are **dimmed**, so the board shows at a glance what is actually in
+play.
 
 The scoring is deliberately literal: *how long is the run this creates?*
 Landing on a matching suit beats landing on a stranger, because it actually
@@ -145,16 +155,38 @@ rule set is testable headlessly — which is what `test/` does.
 
 ## Balance
 
-Tuned by eye, then sanity-checked with a scripted greedy bot
-(no lookahead, random boon choices, never uses reserve cells or charges).
-It clears realm 1 about 85% of the time on Novice and stalls around realm 3–4.
-A human using the techniques should get considerably further; nobody has
-ascended yet. Treat the difficulty tables as a first pass — the knobs are
-`DIFFICULTIES` and `realmConfig()` in `src/engine.js`.
+Requiring a **cleared board** per realm, rather than a quota of sequences, made
+this a substantially harder game. Measured with a scripted greedy bot (no
+lookahead, random boon choices, never touches reserve cells or charges), over
+60 runs per difficulty:
+
+| | clears realm 1 | avg realm reached | ascended |
+|---|---|---|---|
+| Novice | 30% | 1.4 | 0/60 |
+| Adept | 42% | 1.5 | 0/60 |
+| Immortal | 42% | 1.6 | 0/60 |
+
+The bot is much weaker than a person — a one-suit board is very winnable by
+hand — so read these as a floor, not a forecast. But the shape is real: under
+the old quota the same bot reached realm 3–4, and it now stalls at 1–2.
+
+Two things follow, and both are yours to call:
+
+- **Ascension is close to unreachable.** Adept realm 6 is a 117-card,
+  four-suit board where all nine sequences must go — a harder deal than
+  standard four-suit Spider, which strong players win a few percent of the
+  time. Five boons help, but not that much.
+- **Realm 1 is now a real commitment** rather than a tutorial: a full 52-card
+  game before you see a single upgrade.
+
+If either bites, the knobs are `DIFFICULTIES` (`startSets` and the `suits`
+ramp) and `realmConfig()` in `src/engine.js`. Dropping to four realms, or
+holding Adept at two suits until realm 5, would both help a lot.
 
 Known open questions:
 
-- Six realms is a long run (21 meridians). It may want to be four.
+- A full Adept run is 39 sequences across six realms, and realm 6 is a harder
+  board than standard four-suit Spider. Six realms may want to be four.
 - Fortune, the filler boon, is nearly unreachable: paths only run out of tiers
   after ten picks and a run offers five.
 - Sealing a meridian has no animation yet, just a toast.

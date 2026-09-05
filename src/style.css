@@ -195,9 +195,17 @@ button .count { color: var(--gold); font-size: 11px; }
 }
 .card.wild .center { opacity: .85; }
 
-.card.picked { box-shadow: 0 0 0 2px var(--jade), 0 6px 16px rgba(0,0,0,.6); z-index: 5; }
-.card.hint { box-shadow: 0 0 0 2px var(--gold), 0 6px 16px rgba(0,0,0,.6); }
 .card.ghost { opacity: .32; }
+
+/* Buried under a run that has to move first: readable, plainly not in play. */
+.card.up.stuck { filter: brightness(.6) saturate(.5) contrast(.92); }
+.card.up.stuck.hint-src { filter: none; }
+
+/* A tapped card slides to its new column rather than teleporting. */
+.card.flying {
+  transition: transform .5s cubic-bezier(.22,.85,.3,1);
+  z-index: 12;
+}
 
 .card.sealing { animation: seal .42s ease forwards; pointer-events: none; }
 @keyframes seal {

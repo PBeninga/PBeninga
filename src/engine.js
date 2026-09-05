@@ -17,10 +17,14 @@ export const REALMS = [
 ];
 export const ASCENSION = { name: 'Immortal Ascension', hanzi: '飛昇' };
 
+// A realm is a whole game of solitaire: you must clear the entire tableau, not
+// just a quota of it. `startSets` is how many A-K sequences the first realm
+// deals; every realm after adds one more set to the deck, and all of them must
+// be sealed. That is what "one more sequence each time" means in practice.
 export const DIFFICULTIES = {
-  novice: { name: 'Novice', suits: [1, 1, 1, 2, 2, 2], spare: 4 },
-  adept: { name: 'Adept', suits: [1, 1, 2, 2, 3, 4], spare: 3 },
-  immortal: { name: 'Immortal', suits: [1, 2, 2, 4, 4, 4], spare: 2 },
+  novice: { name: 'Novice', suits: [1, 1, 1, 2, 2, 2], startSets: 3 },
+  adept: { name: 'Adept', suits: [1, 1, 2, 2, 3, 4], startSets: 4 },
+  immortal: { name: 'Immortal', suits: [1, 2, 2, 4, 4, 4], startSets: 4 },
 };
 
 export const BASE_COLUMNS = 10;
@@ -62,8 +66,10 @@ export class Game {
   realmConfig(realm) {
     const s = this.state;
     const diff = DIFFICULTIES[this.difficulty];
-    const required = Math.max(1, realm - s.fortune);
-    const sets = required + diff.spare;
+    const sets = diff.startSets + (realm - 1);
+    // Clear the board to break through. Fortune is the one thing that lets you
+    // leave a sequence on the table.
+    const required = Math.max(1, sets - s.fortune);
     const severed = this.tier('severance') >= 3 ? 2 : this.tier('severance') >= 1 ? 1 : 0;
     const suitCount = Math.max(1, Math.min(SUITS.length, diff.suits[realm - 1] - severed));
     const columns = BASE_COLUMNS + this.tier('expansion');

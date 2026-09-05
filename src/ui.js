@@ -121,8 +121,11 @@ function renderHud() {
 
   const pips = $('#pips');
   pips.innerHTML = '';
-  for (let i = 0; i < s.required; i++) {
-    pips.appendChild(el('div', 'pip' + (i < s.meridians ? ' on' : '')));
+  // Nine pips crowd a phone; the count beside them says the same thing.
+  if (!isNarrow()) {
+    for (let i = 0; i < s.required; i++) {
+      pips.appendChild(el('div', 'pip' + (i < s.meridians ? ' on' : '')));
+    }
   }
   $('#meridian-label').textContent = `${s.meridians}/${s.required} meridians`;
 
@@ -158,7 +161,10 @@ function renderHud() {
   s.reserve.forEach((card, i) => {
     const c = el('div', 'cell' + (card ? ' filled' : ''));
     c.dataset.cell = i;
-    if (card) c.appendChild(el('span', 'mini', miniLabel(card)));
+    if (card) {
+      c.dataset.id = card.id;
+      c.appendChild(el('span', 'mini', miniLabel(card)));
+    }
     cells.appendChild(c);
   });
 
@@ -186,12 +192,17 @@ function renderBoard() {
   cols.forEach((col, ci) => {
     const colEl = el('div', 'col' + (col.length ? '' : ' empty'));
     colEl.dataset.col = ci;
+    // Everything above the movable run is stuck where it is until the cards
+    // below it move, so it reads as dimmed.
+    const liftable = col.length - game.columnTail(ci);
     let top = 0;
     col.forEach((card, i) => {
       const n = cardEl(card);
       n.style.top = Math.round(top) + 'px';
       n.dataset.col = ci;
       n.dataset.idx = i;
+      n.dataset.id = card.id;
+      if (card.faceUp && i < liftable) n.classList.add('stuck');
       if (isHintSource(ci, i)) n.classList.add('hint-src');
       if (drag && drag.active && drag.zone === 'col' && drag.index === ci && i >= col.length - drag.count) {
         n.classList.add('ghost');
@@ -252,14 +263,61 @@ function markTargets(run, on) {
 
 // ------------------------------------------------------------- act on move
 
-function attempt(from, to) {
+const FLIGHT_MS = 500;
+
+/** Where every card on the board is right now, keyed by card id. */
+function snapshotPositions() {
+  const map = new Map();
+  document.querySelectorAll('#board .card, #cells .cell[data-id]').forEach((n) => {
+    map.set(n.dataset.id, n.getBoundingClientRect());
+  });
+  return map;
+}
+
+/**
+ * Slide the cards from where they were to where they now are (FLIP): the board
+ * has already re-rendered, so put each card back with a transform and let the
+ * transition carry it home. Cards sealed into a meridian are simply gone and
+ * have nothing to animate.
+ */
+function flyFrom(before) {
+  const moving = [];
+  document.querySelectorAll('#board .card').forEach((n) => {
+    const was = before.get(n.dataset.id);
+    if (!was) return;
+    const now = n.getBoundingClientRect();
+    const dx = was.left - now.left;
+    const dy = was.top - now.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    n.style.transform = `translate(${dx}px, ${dy}px)`;
+    moving.push(n);
+  });
+  if (!moving.length) return;
+  void document.body.offsetHeight;    // paint the offset before undoing it
+  for (const n of moving) {
+    n.classList.add('flying');
+    n.style.transform = '';
+  }
+  setTimeout(() => {
+    for (const n of moving) n.classList.remove('flying');
+  }, FLIGHT_MS + 40);
+}
+
+/**
+ * `animate` belongs to taps only. After a drag the card is already where the
+ * player put it, so sliding it would mean snapping it back to its old column
+ * first and crossing the board a second time.
+ */
+function attempt(from, to, { animate = false } = {}) {
   const force = armed === 'void';
   const before = game.state.totalMeridians;
+  const positions = animate ? snapshotPositions() : null;
   const ok = game.move(from, to, { force });
   if (ok) {
     if (force) armed = null;
     if (game.state.totalMeridians > before) toast('Meridian sealed');
     afterAction();
+    if (positions) flyFrom(positions);
   }
   return ok;
 }
@@ -511,7 +569,7 @@ function onCardTap(d) {
   const from = { zone: 'col', index: d.index, count: d.count };
   const target = game.bestTargetFor(from);
   if (target === null) return nudge(d.node);
-  attempt(from, { zone: 'col', index: target });
+  attempt(from, { zone: 'col', index: target }, { animate: true });
 }
 
 function onCellTap(index) {
@@ -524,7 +582,7 @@ function onCellTap(index) {
   if (!card) return;
   const from = { zone: 'reserve', index };
   const target = game.bestTargetFor(from);
-  if (target !== null) attempt(from, { zone: 'col', index: target });
+  if (target !== null) attempt(from, { zone: 'col', index: target }, { animate: true });
 }
 
 // -------------------------------------------------------------- overlays
@@ -569,6 +627,7 @@ function rulesHtml() {
       <h3>The Tableau</h3>
       <ul>
         <li>Build <b>down by rank</b> onto any card — suit does not matter while stacking.</li>
+        <li>Cards that cannot be lifted yet are <b>dimmed</b>; free the run below them first.</li>
         <li>Lift a group only when it is a <b>descending run of one suit</b>.</li>
         <li><b>Tap or click a card</b> and it flies to whichever column builds the
         longest sequence. Drag it instead when you want a different column.</li>
@@ -577,8 +636,10 @@ function rulesHtml() {
       <h3>Cultivation</h3>
       <ul>
         <li>A complete <b>K→A run of one suit</b> is a <b>meridian</b>. It seals itself and leaves the column.</li>
-        <li>Seal the realm's quota to <b>break through</b>: choose a boon, then face a fresh, larger tableau.</li>
-        <li>Realm 1 asks for one meridian. Realm 6 asks for six. The paths you walk are what close that gap.</li>
+        <li>A realm is a <b>whole game</b>: clear every sequence in the deck, not just the first. Only then do you
+        <b>break through</b>, choose a boon, and face a fresh tableau.</li>
+        <li>Every realm deals <b>one more sequence than the last</b>, and all of them must go. The paths you
+        walk are what close that gap.</li>
         <li>Three undos per realm. If the tableau locks up and the stock is spent, the climb ends.</li>
       </ul>
       <h3>Techniques &amp; Keys</h3>
@@ -624,9 +685,9 @@ function titleScreen() {
   p.innerHTML = `
     <div class="hanzi-big">九脈</div>
     <h1>NINE MERIDIANS</h1>
-    <p class="lead">A cultivation roguelike played in Spider solitaire. Seal a full K→A
-    sequence and you break through to the next realm — but each realm demands one more
-    sequence than the last.</p>
+    <p class="lead">A cultivation roguelike played in Spider solitaire. A realm is a whole
+    game: clear every K→A sequence on the board and you break through — but the next realm
+    deals one more sequence than the last, and all of them must go.</p>
     ${best ? `<p>Highest cultivation attained: <b style="color:var(--gold)">${best}</b></p>` : ''}
     <div class="setup">
       <div class="field"><label>Seed</label><input id="seed-input" placeholder="random" /></div>
@@ -671,8 +732,8 @@ function breakthroughScreen() {
   p.appendChild(el('div', 'hanzi-big', REALMS[s.realm - 1].hanzi));
   p.appendChild(el('h1', '', 'BREAKTHROUGH'));
   p.appendChild(el('p', 'lead',
-    `${REALMS[s.realm - 1].name} is complete. Ahead lies <b style="color:var(--gold)">${next.name}</b>, `
-    + `which demands <b style="color:var(--gold)">${Math.max(1, s.realm + 1 - s.fortune)} meridians</b>.`));
+    `${REALMS[s.realm - 1].name} is cleared. Ahead lies <b style="color:var(--gold)">${next.name}</b>, `
+    + `a board of <b style="color:var(--gold)">${game.realmConfig(s.realm + 1).required} sequences</b>, all of which must go.`));
   p.appendChild(el('p', '', 'Choose the dao you will walk. The choice is permanent.'));
   const offer = el('div', 'offer');
   s.offer.forEach((boon, i) => {

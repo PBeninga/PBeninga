@@ -180,6 +180,26 @@ for (const view of VIEWS) {
     if (afterLen <= beforeLen && afterLen !== 0) throw new Error('the card did not land in the expected column');
   });
 
+  await check('a tapped card slides to its new column', async () => {
+    const p = await findMove(page);
+    if (!p) throw new Error('no legal move');
+    const c = await page.locator(`.card[data-col="${p.i}"][data-idx="${p.idx}"]`).boundingBox();
+    await page.mouse.click(c.x + c.width / 2, c.y + 8);
+    const mid = await page.evaluate(() => {
+      const n = document.querySelector('#board .card.flying');
+      if (!n) return null;
+      const cs = getComputedStyle(n);
+      return { duration: parseFloat(cs.transitionDuration), transform: cs.transform };
+    });
+    if (!mid) throw new Error('the card teleported -- nothing was animated');
+    if (Math.abs(mid.duration - 0.5) > 0.05) throw new Error('flight took ' + mid.duration + 's, wanted 0.5s');
+    if (mid.transform === 'none') throw new Error('no offset applied, so nothing will slide');
+    await page.waitForTimeout(650);
+    if (await page.evaluate(() => document.querySelectorAll('#board .card.flying').length)) {
+      throw new Error('the animation never cleared up');
+    }
+  });
+
   await check('the hint carousel cycles and reports its position', async () => {
     const total = await page.evaluate(() => window.NineMeridians.game.listMoves().length);
     if (total < 2) throw new Error('need at least two moves to cycle');
@@ -263,6 +283,31 @@ for (const view of VIEWS) {
     }
   });
 
+  await check('cards that cannot be lifted are dimmed', async () => {
+    const r = await page.evaluate(() => {
+      const g = window.NineMeridians.game;
+      const wrong = [];
+      let faceUp = 0;
+      let dimmed = 0;
+      g.state.columns.forEach((col, ci) => {
+        const liftable = col.length - g.columnTail(ci);
+        col.forEach((card, i) => {
+          if (!card.faceUp) return;
+          faceUp++;
+          const n = document.querySelector(`.card[data-col="${ci}"][data-idx="${i}"]`);
+          const isDim = n && n.classList.contains('stuck');
+          if (isDim) dimmed++;
+          if (isDim !== i < liftable) wrong.push({ ci, i, isDim });
+        });
+      });
+      const sample = document.querySelector('.card.up.stuck');
+      return { faceUp, dimmed, wrong, filter: sample ? getComputedStyle(sample).filter : null };
+    });
+    if (r.wrong.length) throw new Error('wrong dim state on ' + JSON.stringify(r.wrong.slice(0, 3)));
+    if (!r.dimmed) throw new Error('no buried card was dimmed after a deal');
+    if (r.filter === 'none') throw new Error('the dim class has no visual effect');
+  });
+
   await check('the breakthrough offer fits without scrolling', async () => {
     await page.evaluate(() => {
       const N = window.NineMeridians, g = N.game;
@@ -270,6 +315,7 @@ for (const view of VIEWS) {
       for (let r = 13; r >= 2; r--) col.push({ id: 9000 + r, rank: r, suit: 'spade', faceUp: true, wild: false });
       g.state.columns[0] = col;
       g.state.columns[1] = [{ id: 8999, rank: 1, suit: 'spade', faceUp: true, wild: false }];
+      g.state.required = g.state.meridians + 1;   // one sequence from a cleared board
       g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
       N.render(); N.checkPhase();
     });
