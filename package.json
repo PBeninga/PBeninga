@@ -1,0 +1,12 @@
+{
+  "name": "nine-meridians",
+  "version": "0.1.0",
+  "description": "A cultivation roguelike played in Spider solitaire.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "build": "node build.js",
+    "serve": "python3 -m http.server 8000"
+  }
+}

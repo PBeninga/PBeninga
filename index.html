@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Nine Meridians — a cultivation solitaire roguelike</title>
+<meta name="description" content="A cultivation roguelike played in Spider solitaire. Seal a K-A sequence to break through a realm; every realm demands one more." />
+<link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+<div id="app">
+  <header class="hud">
+    <div class="realm">
+      <div class="realm-seal" id="realm-seal">練氣</div>
+      <div>
+        <div class="realm-name" id="realm-name">Qi Condensation</div>
+        <div class="realm-sub" id="realm-sub">Realm 1 of 6</div>
+      </div>
+    </div>
+
+    <div class="meridians">
+      <div class="pips" id="pips"></div>
+      <div class="meridian-label" id="meridian-label">0/1 meridians</div>
+    </div>
+
+    <div class="boon-chips" id="boon-chips"></div>
+
+    <div class="hud-right">
+      <div class="tray" id="cells-wrap" hidden>
+        <span class="tray-label">Cells</span>
+        <div class="tray" id="cells"></div>
+      </div>
+      <div class="tray">
+        <span class="tray-label">Stock</span>
+        <div class="stock" id="stock">0</div>
+      </div>
+      <button id="btn-void" hidden>Void Step <span class="count">0</span></button>
+      <button id="btn-transmute" hidden>Transmute <span class="count">0</span></button>
+      <button id="btn-awaken" hidden>Awaken <span class="count">0</span></button>
+      <button id="btn-undo">Undo <span class="count">3</span></button>
+      <button id="btn-menu" title="Pause, rules and keys">☰ Menu</button>
+    </div>
+  </header>
+
+  <main id="board"></main>
+
+  <footer id="ticker">
+    <span></span>
+    <span id="seed-tag" style="margin-left:auto;opacity:.6"></span>
+  </footer>
+</div>
+
+<div id="overlay" hidden></div>
+
+<script type="module">
+  import { boot } from './src/ui.js';
+  boot();
+</script>
+</body>
+</html>
