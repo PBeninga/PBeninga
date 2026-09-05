@@ -534,21 +534,46 @@ export function serialize(game) {
   });
 }
 
+/**
+ * Restore a saved run, or return null if the save cannot be trusted.
+ *
+ * `required` is recomputed rather than believed: what a realm demands has
+ * changed before (it used to be a quota, it is now the whole board) and a save
+ * written under the old rule would otherwise resume with the old demand. The
+ * recomputed value is only safe if the saved cards really are the deal this
+ * config describes, so that is checked by conservation -- every card dealt is
+ * either still in play or part of a sealed thirteen. A save that fails is from
+ * an incompatible build and is discarded rather than resumed into a board that
+ * cannot be finished.
+ */
 export function deserialize(json) {
-  const data = typeof json === 'string' ? JSON.parse(json) : json;
+  let data;
+  try {
+    data = typeof json === 'string' ? JSON.parse(json) : json;
+  } catch {
+    return null;
+  }
   if (!data || data.v !== 1 || !data.state) return null;
+  const state = data.state;
+  if (!Array.isArray(state.columns) || !Array.isArray(state.stock) || !Array.isArray(state.reserve)) return null;
+  if (!DIFFICULTIES[data.difficulty] || !REALMS[state.realm - 1]) return null;
+
   const game = Object.create(Game.prototype);
   game.seed = data.seed;
   game.difficulty = data.difficulty;
   game.rng = makeRng(data.seed);
   game.rng.setState(data.rng);
-  game.state = data.state;
+  game.state = state;
   game.undoStack = [];
-  const ids = [
-    ...data.state.columns.flat(),
-    ...data.state.stock,
-    ...data.state.reserve.filter(Boolean),
-  ].map((c) => c.id);
+
+  const inPlay = [...state.columns.flat(), ...state.stock, ...state.reserve.filter(Boolean)];
+  const cfg = game.realmConfig(state.realm);
+  if (inPlay.length + SEQUENCE_LENGTH * state.meridians !== cfg.sets * SEQUENCE_LENGTH + cfg.wilds) {
+    return null;
+  }
+  state.required = cfg.required;
+
+  const ids = inPlay.map((c) => c.id);
   bumpCardIds(ids.length ? Math.max(...ids) + 1 : 1);
   return game;
 }

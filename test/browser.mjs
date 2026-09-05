@@ -117,6 +117,30 @@ for (const view of VIEWS) {
 
   await check('the title screen fits without scrolling', () => overlayFits('the title screen'));
 
+  await check('a save from an incompatible build is dropped, not resumed', async () => {
+    await page.evaluate(() => {
+      // A realm-1 save claiming a one-sequence quota and holding no cards:
+      // exactly the shape the old rules wrote, and unaccountable under these.
+      localStorage.setItem('nine-meridians/run', JSON.stringify({
+        v: 1, seed: 'STALE', difficulty: 'adept', rng: 1,
+        state: {
+          phase: 'play', realm: 1, required: 1, meridians: 0, totalMeridians: 0,
+          collected: [], columns: [[]], reserve: [], stock: [], boons: {}, fortune: 0,
+          charges: { voidStep: 0, transmute: 0, awaken: 0 }, undosLeft: 3, moves: 0,
+          offer: [], log: [],
+        },
+      }));
+    });
+    await page.reload();
+    await page.waitForTimeout(250);
+    const r = await page.evaluate(() => ({
+      resume: !!document.querySelector('#resume-wrap button'),
+      stored: localStorage.getItem('nine-meridians/run'),
+    }));
+    if (r.resume) throw new Error('offered to resume a save the rules cannot honour');
+    if (r.stored) throw new Error('the dead save was left in storage');
+  });
+
   await page.fill('#seed-input', 'BROWSERTEST');
   await page.click('#btn-begin');
   await page.waitForTimeout(350);
@@ -280,6 +304,27 @@ for (const view of VIEWS) {
     await page.waitForTimeout(220);
     if (await page.evaluate(() => window.NineMeridians.game.state.stock.length) >= before) {
       throw new Error('the stock did not deal');
+    }
+  });
+
+  await check('a live run resumes exactly where it left off', async () => {
+    const snap = () => page.evaluate(() => {
+      const g = window.NineMeridians.game;
+      return { realm: g.state.realm, required: g.state.required, meridians: g.state.meridians,
+        moves: g.state.moves, board: g.state.columns.map((c) => c.map((x) => x.id).join('.')).join('|') };
+    });
+    const before = await snap();
+    await page.reload();
+    await page.waitForTimeout(250);
+    const btn = page.locator('#resume-wrap button');
+    if (!(await btn.count())) throw new Error('a live run was not offered for resume');
+    const label = await btn.textContent();
+    if (!label.includes(`/${before.required}`)) throw new Error('resume label read "' + label + '"');
+    await btn.click();
+    await page.waitForTimeout(300);
+    const after = await snap();
+    if (JSON.stringify(after) !== JSON.stringify(before)) {
+      throw new Error('the run came back changed: ' + JSON.stringify({ before, after }));
     }
   });
 

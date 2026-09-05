@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, REALMS, BASE_COLUMNS, DIFFICULTIES } from '../src/engine.js';
+import { Game, REALMS, BASE_COLUMNS, DIFFICULTIES, serialize, deserialize } from '../src/engine.js';
 import { makeCard, makeWild, SEQUENCE_LENGTH } from '../src/cards.js';
 
 const up = (rank, suit) => makeCard(rank, suit, true);
@@ -380,4 +380,64 @@ test('listMoves includes reserve cells and is empty once the run ends', () => {
   assert.equal(moves[0].to.index, 0);
   g.state.phase = 'failed';
   assert.deepEqual(g.listMoves(), []);
+});
+
+
+test('a saved run round-trips', () => {
+  const g = new Game({ seed: 'SAVE', difficulty: 'adept' });
+  g.deal();
+  const back = deserialize(serialize(g));
+  assert.ok(back);
+  assert.equal(back.seed, g.seed);
+  assert.equal(back.difficulty, g.difficulty);
+  assert.equal(back.state.required, g.state.required);
+  assert.deepEqual(
+    back.state.columns.map((c) => c.map((x) => x.id)),
+    g.state.columns.map((c) => c.map((x) => x.id)),
+  );
+});
+
+test('a save written under the old quota is repaired, not obeyed', () => {
+  // Before a realm meant "clear the board", realm 1 asked for a single
+  // sequence. Resuming such a save must not break through after one K-A.
+  const g = new Game({ seed: 'OLD', difficulty: 'adept' });
+  const stale = JSON.parse(serialize(g));
+  stale.state.required = 1;
+  const back = deserialize(JSON.stringify(stale));
+  assert.ok(back);
+  assert.equal(back.state.required, g.realmConfig(1).required);
+});
+
+test('a save whose cards do not match its realm is discarded', () => {
+  const g = new Game({ seed: 'MISMATCH', difficulty: 'adept' });
+  const bad = JSON.parse(serialize(g));
+  bad.state.stock.pop();                       // a card that cannot be accounted for
+  assert.equal(deserialize(JSON.stringify(bad)), null);
+
+  const wrongRealm = JSON.parse(serialize(g));
+  wrongRealm.state.realm = 4;                  // a realm-4 deck is much larger
+  assert.equal(deserialize(JSON.stringify(wrongRealm)), null);
+});
+
+test('a mid-realm save survives sealed meridians and spent stock', () => {
+  const g = new Game({ seed: 'MID', difficulty: 'novice' });
+  g.state.meridians = 2;
+  g.state.totalMeridians = 2;
+  for (let n = 0; n < 2 * 13; n++) {           // stand in for two sealed runs
+    if (g.state.stock.length) g.state.stock.pop();
+    else g.state.columns.find((c) => c.length).pop();
+  }
+  const back = deserialize(serialize(g));
+  assert.ok(back, 'conservation must count sealed cards, not just cards in play');
+  assert.equal(back.state.required, g.realmConfig(1).required);
+});
+
+test('junk in the save slot is ignored', () => {
+  assert.equal(deserialize('not json'), null);
+  assert.equal(deserialize('{}'), null);
+  assert.equal(deserialize(JSON.stringify({ v: 99, state: {} })), null);
+  const g = new Game({ seed: 'BADDIFF' });
+  const bad = JSON.parse(serialize(g));
+  bad.difficulty = 'nonsense';
+  assert.equal(deserialize(JSON.stringify(bad)), null);
 });

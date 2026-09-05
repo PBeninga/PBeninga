@@ -703,14 +703,15 @@ function titleScreen() {
     <div id="resume-wrap"></div>
     ${rulesHtml()}`;
   overlay(p);
-  const saved = localStorage.getItem(SAVE_KEY);
-  if (saved) {
+  // Only offer to resume a save the current rules can actually honour; an
+  // unreadable one is cleared rather than left behind a dead button.
+  const restored = loadSaved();
+  if (restored) {
     const wrap = $('#resume-wrap');
-    const b = el('button', '', 'Resume the climb');
+    const b = el('button', '', `Resume — ${REALMS[restored.state.realm - 1].name}, `
+      + `${restored.state.meridians}/${restored.state.required} sealed`);
     b.style.marginTop = '12px';
     b.onclick = () => {
-      const restored = deserialize(saved);
-      if (!restored) return;
       game = restored;
       closeOverlay();
       render();
@@ -811,6 +812,19 @@ function checkPhase() {
 }
 
 // ------------------------------------------------------------------ setup
+
+/** The stored run, or null if there isn't one the current rules can honour. */
+function loadSaved() {
+  let raw = null;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (_) { return null; }
+  if (!raw) return null;
+  const restored = deserialize(raw);
+  if (!restored) {
+    try { localStorage.removeItem(SAVE_KEY); } catch (_) { /* ignore */ }
+    return null;
+  }
+  return restored;
+}
 
 function save() {
   try {
