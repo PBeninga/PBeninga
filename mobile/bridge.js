@@ -14,6 +14,7 @@ import { AdMob, BannerAdPosition, BannerAdSize } from '@capacitor-community/admo
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 // Google's public test units. They always fill and they never earn a cent --
 // swap in your own before shipping, and check Google's current test-ad page if
@@ -96,8 +97,23 @@ function bindBackButton() {
   });
 }
 
+/**
+ * Real haptics. `navigator.vibrate` covers Android but iOS has no equivalent,
+ * so the game asks the host for a tap and this is the host's answer. A pattern
+ * arrives as an array; only its weight matters here.
+ */
+function bindHaptics() {
+  if (!window.Ascendant || !window.Ascendant.setBuzzer) return;
+  window.Ascendant.setBuzzer((pattern) => {
+    const total = Array.isArray(pattern) ? pattern.reduce((a, b) => a + b, 0) : pattern;
+    const style = total > 80 ? ImpactStyle.Heavy : total > 20 ? ImpactStyle.Medium : ImpactStyle.Light;
+    Haptics.impact({ style }).catch(() => {});
+  });
+}
+
 export async function startNative() {
   bindBackButton();
+  bindHaptics();
   try { await startAdMob(); } catch (_) { /* ads off, game on */ }
   // The game reads this on boot; attachAds also works after boot, which is what
   // this call uses so the SDK's start-up never delays the first frame.

@@ -19,7 +19,7 @@ bridge is written against the plugin APIs named below but has never been run.
 ## 1. Scaffold (once)
 
 ```sh
-npm i @capacitor/core @capacitor/app @capacitor/preferences @capacitor-community/admob
+npm i @capacitor/core @capacitor/app @capacitor/preferences @capacitor/haptics @capacitor-community/admob
 npm i -D @capacitor/cli @capacitor/assets
 cp mobile/capacitor.config.json .
 npm run build            # writes dist/www/index.html
@@ -101,7 +101,16 @@ but yours must declare it too.
 one bundles the game locally and runs offline, which is the distinction that
 matters; do not switch the config to load a remote URL.
 
-## 6. What the player actually sees
+## 6. Haptics
+
+The game asks the host for a tap through `window.Ascendant.setBuzzer`, which
+`mobile/bridge.js` answers with `@capacitor/haptics`. On the web it falls back
+to `navigator.vibrate`, which iOS Safari ignores — so the native build is the
+only place iOS players feel anything. The sound switch on the pause screen
+mutes haptics too, which is what a player who turns sound off in a meeting
+actually means.
+
+## 7. What the player actually sees
 
 | Surface | When | Capped by |
 |---|---|---|

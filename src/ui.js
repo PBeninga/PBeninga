@@ -10,7 +10,7 @@ import {
   buyPremium, restorePremium, REWARDS,
 } from './ads.js';
 import {
-  soundSetup, soundOn, setSoundOn, playSound, buzz,
+  soundSetup, soundOn, setSoundOn, playSound, buzz, setBuzzer,
 } from './sound.js';
 import {
   dayKey, dailySeed, dayLabel, addRun, readRuns, summarise,
@@ -1558,6 +1558,8 @@ export function boot() {
     checkPhase,
     startDaily,
     recordsScreen,
+    /** A native wrapper supplies real haptics; the web makes do with vibrate. */
+    setBuzzer,
     ads: { ready: adsReady, isPremium: adsPremium, canReward, lossBreak },
     /**
      * Attach a host's ad and purchase bridge, then redraw what it unlocks.
