@@ -585,3 +585,4 @@ button.earn { border-color: var(--gold); box-shadow: 0 0 18px rgba(232, 189, 106
 button.quiet { opacity: .75; }
 .support { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(232, 189, 106, .18); }
 .support .fine, p.fine { margin: 8px 0 0; font-size: 12px; opacity: .68; letter-spacing: .04em; }
+.cell.drop-ok { border-color: var(--gold); box-shadow: 0 0 14px rgba(232, 189, 106, .35); }

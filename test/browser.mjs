@@ -386,6 +386,81 @@ for (const view of VIEWS) {
     await unstash(page);
   });
 
+  await check('a card drags into a reserve slot, aimed either way', async () => {
+    await hintOff(page);
+    await stash(page);
+    try {
+      const type = view.touch ? 'touch' : 'mouse';
+      // Two aims, because a lifted card and the finger under it are not in the
+      // same place: one player puts the finger on the slot, another puts the
+      // card on it. Both must work, and the slots sit at the top of the screen
+      // where a lifted card can leave the page entirely.
+      for (const aim of ['finger-on-slot', 'card-on-slot']) {
+        const set = await page.evaluate(() => {
+          const g = window.Ascendant.game;
+          g.state.boons = { cell: 1 };
+          g.state.reserve = [null];
+          window.Ascendant.render();
+          for (let i = 0; i < g.state.columns.length; i++) {
+            const col = g.state.columns[i];
+            if (!col.length) continue;
+            const n = document.querySelector(`.card[data-col="${i}"][data-idx="${col.length - 1}"]`);
+            if (!n) continue;
+            const r = n.getBoundingClientRect();
+            const c = document.querySelector('.cell').getBoundingClientRect();
+            return {
+              sx: r.x + r.width / 2, sy: r.y + r.height / 2,
+              cx: c.x + c.width / 2, cy: c.y + c.height / 2,
+              rank: col[col.length - 1].rank,
+            };
+          }
+          return null;
+        });
+        if (!set) throw new Error('no card to drag');
+        // 38 is TOUCH_LIFT: the card rides that far above the finger.
+        const ey = aim === 'card-on-slot' && view.touch ? set.cy + 38 : set.cy;
+        await dragBy(page, type, set.sx, set.sy, set.cx, ey);
+        const after = await page.evaluate(() => ({
+          parked: window.Ascendant.game.state.reserve[0]
+            ? window.Ascendant.game.state.reserve[0].rank : null,
+          filled: document.querySelectorAll('.cell.filled').length,
+          drawn: document.querySelectorAll('#board .card').length,
+          inEngine: window.Ascendant.game.state.columns.flat().length,
+        }));
+        if (after.parked !== set.rank) throw new Error(`${aim}: the card did not go in the slot`);
+        if (!after.filled) throw new Error(`${aim}: the slot does not show the card`);
+        if (after.drawn !== after.inEngine) {
+          throw new Error(`${aim}: board shows ${after.drawn} cards, engine has ${after.inEngine}`);
+        }
+      }
+
+      // A drop the engine refuses must still leave the board whole.
+      const before = await page.evaluate(() => {
+        const g = window.Ascendant.game;
+        for (let i = 0; i < g.state.columns.length; i++) {
+          const col = g.state.columns[i];
+          if (!col.length) continue;
+          const n = document.querySelector(`.card[data-col="${i}"][data-idx="${col.length - 1}"]`);
+          if (!n) continue;
+          const r = n.getBoundingClientRect();
+          const c = document.querySelector('.cell').getBoundingClientRect();
+          return { sx: r.x + r.width / 2, sy: r.y + r.height / 2, cx: c.x + c.width / 2, cy: c.y + c.height / 2 };
+        }
+        return null;
+      });
+      await dragBy(page, view.touch ? 'touch' : 'mouse', before.sx, before.sy, before.cx, before.cy);
+      const whole = await page.evaluate(() => ({
+        drawn: document.querySelectorAll('#board .card').length,
+        inEngine: window.Ascendant.game.state.columns.flat().length,
+      }));
+      if (whole.drawn !== whole.inEngine) {
+        throw new Error(`a refused drop left the board short: ${whole.drawn} drawn, ${whole.inEngine} held`);
+      }
+    } finally {
+      await unstash(page);
+    }
+  });
+
   await check('a wildcard drags out of the deck and costs the board a card', async () => {
     await hintOff(page);
     await stash(page);

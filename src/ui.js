@@ -39,6 +39,30 @@ let wildDrag = null;
 // How far above the fingertip a dragged stack floats, so it stays visible.
 const TOUCH_LIFT = 38;
 
+/**
+ * What a drag is being dropped on. On touch the card rides above the finger so
+ * it is not hidden by it, and the card is what the player aims -- so the lifted
+ * point is tried first. But the reserve slots sit at the very top of the
+ * screen, where that point lands in the top bar, or clean off the page in
+ * landscape. The finger's own position is tried next, so the one row a lifted
+ * card cannot reach is not the row it most needs to.
+ */
+function dropTargetAt(ev, touch) {
+  const points = touch
+    ? [[ev.clientX, ev.clientY - TOUCH_LIFT], [ev.clientX, ev.clientY]]
+    : [[ev.clientX, ev.clientY]];
+  for (const [x, y] of points) {
+    if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) continue;
+    const under = document.elementFromPoint(x, y);
+    if (!under) continue;
+    const cell = under.closest('.cell');
+    if (cell) return { zone: 'reserve', index: Number(cell.dataset.cell) };
+    const col = under.closest('.col');
+    if (col) return { zone: 'col', index: Number(col.dataset.col) };
+  }
+  return null;
+}
+
 // ------------------------------------------------------------------ cards
 
 function cardEl(card) {
@@ -352,6 +376,13 @@ function markTargets(run, on) {
     if (drag && drag.zone === 'col' && drag.index === i) return;
     if (game.canDrop(run, { zone: 'col', index: i })) colEl.classList.add('drop-ok');
   });
+  document.querySelectorAll('.cell').forEach((cellEl) => {
+    cellEl.classList.remove('drop-ok');
+    if (!on) return;
+    if (game.canDrop(run, { zone: 'reserve', index: Number(cellEl.dataset.cell) })) {
+      cellEl.classList.add('drop-ok');
+    }
+  });
 }
 
 // ------------------------------------------------------------- act on move
@@ -599,9 +630,8 @@ function onWildPointerUp(ev) {
   if (d.active) {
     d.layer.remove();
     markWildTargets(false);
-    const under = document.elementFromPoint(ev.clientX, ev.clientY - (d.touch ? TOUCH_LIFT : 0));
-    const colEl = under && under.closest('.col');
-    if (colEl) spendWild(Number(colEl.dataset.col));
+    const to = dropTargetAt(ev, d.touch);
+    if (to && to.zone === 'col') spendWild(to.index);
     else render();
     return;
   }
@@ -898,13 +928,12 @@ function onPointerUp(ev) {
   drag = null;
   if (d.active) {
     d.layer.remove();
-    const under = document.elementFromPoint(ev.clientX, ev.clientY - (d.touch ? TOUCH_LIFT : 0));
-    const cell = under && under.closest('.cell');
-    const colEl = under && under.closest('.col');
-    if (cell) attempt({ zone: 'col', index: d.index, count: d.count }, { zone: 'reserve', index: Number(cell.dataset.cell) });
-    else if (colEl && Number(colEl.dataset.col) !== d.index) {
-      attempt({ zone: 'col', index: d.index, count: d.count }, { zone: 'col', index: Number(colEl.dataset.col) });
-    } else afterAction();
+    const to = dropTargetAt(ev, d.touch);
+    const from = { zone: 'col', index: d.index, count: d.count };
+    const played = to && !(to.zone === 'col' && to.index === d.index) && attempt(from, to);
+    // A refused drop still has to put the board back: the lifted cards were
+    // taken out of the drawing when the drag began.
+    if (!played) afterAction();
     return;
   }
   onCardTap(d);
