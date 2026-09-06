@@ -533,11 +533,13 @@ function spendWild(index) {
   if (!result) return false;
   wildArmed = false;
   markWildTargets(false);
-  toast({
-    stock: 'Taken from the stock',
-    hidden: 'A face-down card burned away',
-    replaced: 'The card beneath it consumed',
-  }[result.cost]);
+  const rank = RANK_LABEL[result.value.rank];
+  toast(`${rank} ${{
+    stock: 'taken from the stock',
+    hidden: 'burned out of a face-down pile',
+    faceup: 'swallowed off the board',
+    vault: 'drawn out of the vault',
+  }[result.cost]}`);
   afterAction(game.state.lastSealed || []);
   return true;
 }
@@ -943,8 +945,10 @@ function rulesHtml() {
         <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on any column, ignoring rank; it then
         <b>fixes</b> to one below whatever it sits on (a King in an empty column) and is an ordinary
         card after that. Nothing goes below an Ace, so no wildcard lands on one.</li>
-        <li>Each wildcard <b>takes a card out of the game</b> — the stock first, then a face-down
-        card, last the card it lands on — so the board stays exactly clearable.</li>
+        <li>Paying for it <b>takes a card of that same rank</b> out of the game — the stock first,
+        then a face-down one, then one on the board — so every rank keeps exactly as many copies
+        as there are runes left, and the deal stays clearable. A rank with none left cannot be
+        conjured.</li>
         <li>A <b>vault slot</b> holds one card off the board. Drag a card in; tap it to send it back.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
         <li>Stuck? <b>Hint</b> walks every move the position offers, one a

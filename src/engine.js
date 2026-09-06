@@ -257,37 +257,75 @@ export class Game {
    * The face-down card nearest to being turned over, in whichever column has
    * the most of them -- so a wildcard's cost lands on the worst dig.
    */
-  nextHidden() {
-    const s = this.state;
-    let best = null;
-    for (let i = 0; i < s.columns.length; i++) {
-      const col = s.columns[i];
-      let count = 0;
-      let last = -1;
-      for (let k = 0; k < col.length; k++) if (!col[k].faceUp) { count++; last = k; }
-      if (count && (!best || count > best.count)) best = { column: i, index: last, count };
-    }
-    return best;
-  }
-
   /**
    * The rank a wildcard would take on this column, or null if none is legal.
    * It becomes whatever the position asks for: one below the card it lands on,
    * or a King in an empty column. Nothing continues below an Ace, so a
    * wildcard cannot be dropped on one.
-   *
-   * `replacing` says the wildcard is about to consume the foot card, so it
-   * reads the card that will be underneath it instead.
    */
-  wildValue(index, { replacing = false } = {}) {
+  wildValue(index) {
     const col = this.state.columns[index];
     if (!col) return null;
-    const beneath = col[col.length - (replacing ? 2 : 1)];
+    const beneath = col[col.length - 1];
     if (!beneath) return { rank: KING, suit: SUITS[0] };
     if (!beneath.faceUp) return null;
     const rank = beneath.rank - 1;
     if (rank < 1) return null;
-    return { rank, suit: beneath.wild ? beneath.suit : beneath.suit };
+    return { rank, suit: beneath.suit };
+  }
+
+  /**
+   * Which copy of `rank` a wildcard becoming that rank would swallow, or null
+   * if the board holds none.
+   *
+   * It has to be that rank and nothing else. A board clears only while every
+   * rank has exactly as many copies left as there are runes still to bind, so
+   * a wildcard that arrives as a Six and pays with a Nine leaves seven Sixes
+   * and five Nines: two runes that can never be finished. Taking the matching
+   * rank keeps the count even and the deal exactly clearable.
+   *
+   * Order of preference: the undealt stock first -- taking the card furthest
+   * from the top, so the shortfall lands in the last row dealt -- then a
+   * face-down card out of the deepest dig, then the face-up copy with the
+   * least stacked on it, then the vault.
+   */
+  wildPayment(rank) {
+    const s = this.state;
+
+    for (let i = 0; i < s.stock.length; i++) {
+      if (s.stock[i].rank === rank) return { cost: 'stock', index: i };
+    }
+
+    let dig = null;
+    for (let i = 0; i < s.columns.length; i++) {
+      const col = s.columns[i];
+      let buried = 0;
+      let found = -1;
+      for (let k = 0; k < col.length; k++) {
+        if (col[k].faceUp) continue;
+        buried++;
+        if (col[k].rank === rank) found = k;   // nearest to being turned over
+      }
+      if (found >= 0 && (!dig || buried > dig.buried)) {
+        dig = { cost: 'hidden', column: i, index: found, buried };
+      }
+    }
+    if (dig) return dig;
+
+    let open = null;
+    for (let i = 0; i < s.columns.length; i++) {
+      const col = s.columns[i];
+      for (let k = col.length - 1; k >= 0; k--) {
+        if (!col[k].faceUp || col[k].rank !== rank) continue;
+        const under = col.length - 1 - k;
+        if (!open || under < open.under) open = { cost: 'faceup', column: i, index: k, under };
+        break;
+      }
+    }
+    if (open) return open;
+
+    const slot = s.reserve.findIndex((c) => c && c.rank === rank);
+    return slot >= 0 ? { cost: 'vault', slot } : null;
   }
 
   /** What placing a wildcard on `to` would cost, or null if it cannot be paid. */
@@ -295,35 +333,24 @@ export class Game {
     const s = this.state;
     if (s.phase !== 'play' || s.wilds <= 0) return null;
     if (!to || to.zone !== 'col' || !s.columns[to.index]) return null;
-
-    if (s.stock.length) {
-      const value = this.wildValue(to.index);
-      return value ? { cost: 'stock', value } : null;
-    }
-    const hidden = this.nextHidden();
-    if (hidden) {
-      const value = this.wildValue(to.index);
-      return value ? { cost: 'hidden', ...hidden, value } : null;
-    }
-    const col = s.columns[to.index];
-    if (!col.length || !col[col.length - 1].faceUp) return null;
-    const value = this.wildValue(to.index, { replacing: true });
-    return value ? { cost: 'replaced', value } : null;
+    const value = this.wildValue(to.index);
+    if (!value) return null;
+    const payment = this.wildPayment(value.rank);
+    return payment ? { ...payment, value } : null;
   }
 
   /**
-   * Spend a held wildcard onto a column. Every wildcard placed takes exactly
-   * one card out of the game, so the deal stays exactly clearable however many
-   * are used. The cost comes off the undealt stock first -- a later row simply
-   * comes up a card short -- then the face-down cards, and only when neither is
-   * left does it fall on the face-up card the wildcard lands on.
+   * Spend a held wildcard onto a column. It takes a rank of its own the moment
+   * it lands -- one below whatever it now sits on, or a King in an empty
+   * column -- and is an ordinary card from then on.
    *
-   * Placement ignores the rank you are dropping it on, but the wildcard takes
-   * a rank of its own the moment it lands -- one below whatever it now sits on,
-   * or a King in an empty column -- and is an ordinary card from then on. An
-   * Ace has nothing below it, so a wildcard cannot be dropped on one.
+   * Paying for it takes one card of that same rank out of the game, so the
+   * deal stays exactly clearable however many wildcards are spent: the
+   * wildcard is not a card gained, it is a card moved to where you need it.
+   * An Ace has nothing below it, so a wildcard cannot be dropped on one, and
+   * a rank with no copy left anywhere cannot be conjured.
    *
-   * @returns {false|{cost:'stock'|'hidden'|'replaced', removed:object}}
+   * @returns {false|{cost:'stock'|'hidden'|'faceup'|'vault', removed:object, value:object}}
    */
   placeWild(to) {
     const s = this.state;
@@ -332,20 +359,22 @@ export class Game {
 
     this.pushUndo();
     let removed;
-    if (plan.cost === 'stock') removed = s.stock.pop();
-    else if (plan.cost === 'hidden') removed = s.columns[plan.column].splice(plan.index, 1)[0];
-    else removed = s.columns[to.index].pop();
+    if (plan.cost === 'stock') removed = s.stock.splice(plan.index, 1)[0];
+    else if (plan.cost === 'vault') { removed = s.reserve[plan.slot]; s.reserve[plan.slot] = null; }
+    else removed = s.columns[plan.column].splice(plan.index, 1)[0];
 
     s.columns[to.index].push(makeWild(true, plan.value.rank, plan.value.suit));
     s.wilds--;
     s.moves++;
+    const label = RANK_LABEL[plan.value.rank];
     this.log({
-      stock: 'A wildcard takes a card from the undealt stock.',
-      hidden: 'A wildcard burns away a face-down card.',
-      replaced: 'A wildcard consumes the card it lands on.',
-    }[plan.cost] + ` It settles as ${RANK_LABEL[plan.value.rank]}.`);
+      stock: `A wildcard settles as ${label}, taking one out of the undealt stock.`,
+      hidden: `A wildcard settles as ${label}, burning a face-down one away.`,
+      faceup: `A wildcard settles as ${label}, swallowing the last one on the board.`,
+      vault: `A wildcard settles as ${label}, drawn out of the vault.`,
+    }[plan.cost]);
     this.settle();
-    return { cost: plan.cost, removed };
+    return { cost: plan.cost, removed, value: plan.value };
   }
 
   // ---------------------------------------------------------- resolution
@@ -406,7 +435,7 @@ export class Game {
    */
   hasLegalMove() {
     const s = this.state;
-    if (s.wilds > 0 && this.wildCost({ zone: 'col', index: 0 })) return true;
+    if (s.wilds > 0 && s.columns.some((_, i) => this.wildCost({ zone: 'col', index: i }))) return true;
     if (s.reserve.some((r) => r === null)
       && s.columns.some((c) => c.length === 1 || (c.length > 1 && !c[c.length - 2].faceUp))) return true;
     return this.suggest().kind !== 'over';

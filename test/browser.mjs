@@ -427,6 +427,17 @@ for (const view of VIEWS) {
         expected: col.length > 1 ? col[col.length - 2].rank - 1 : 13,
         face: node ? node.textContent : '',
         lit: document.querySelectorAll('.col.wild-ok').length,
+        // Every rank must still have exactly as many copies as runes to bind.
+        skew: (() => {
+          const left = g.state.required - g.state.runes;
+          const by = new Map();
+          for (const c of [...g.state.columns.flat(), ...g.state.stock]) {
+            by.set(c.rank, (by.get(c.rank) || 0) + 1);
+          }
+          const out = [];
+          for (let r = 1; r <= 13; r++) if ((by.get(r) || 0) !== left) out.push(r);
+          return out;
+        })(),
       };
     });
     if (after.held !== before.held - 1) throw new Error('the wildcard was not spent');
@@ -437,7 +448,9 @@ for (const view of VIEWS) {
       throw new Error(`fixed to ${after.landed.rank}, expected ${after.expected}`);
     }
     if (!/\d|[AJQK]/.test(after.face)) throw new Error('the card face does not show its value');
-    if (after.stock !== before.stock - 1) throw new Error('the stock did not pay for it');
+    if (after.skew.length) {
+      throw new Error(`ranks left uneven after paying for the wildcard: ${after.skew}`);
+    }
     if (after.cards !== before.cards) {
       throw new Error(`the board gained a card (${before.cards} -> ${after.cards})`);
     }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, RANKS, BASE_COLUMNS, DIFFICULTIES, serialize, deserialize } from '../src/engine.js';
-import { makeCard, makeWild, SEQUENCE_LENGTH } from '../src/cards.js';
+import { makeCard, makeWild, SEQUENCE_LENGTH, RANK_LABEL } from '../src/cards.js';
 
 const up = (rank, suit) => makeCard(rank, suit, true);
 
@@ -640,24 +640,33 @@ test('each Wildstone boon puts two wildcards in hand, refreshed each rank', () =
   assert.equal(g.state.wilds, 6, 'a fresh rank restores the hand');
 });
 
-test('a wildcard costs the stock a card before anything else', () => {
+test('a wildcard is paid for out of the stock whenever the stock holds its rank', () => {
   const g = new Game({ seed: 'COSTA', difficulty: 'adept' });
   g.state.boons = { talisman: 1 };
   g.dealRank(1);
   const total = () => g.state.columns.flat().length + g.state.stock.length;
-  const before = { cards: total(), stock: g.state.stock.length, deals: g.dealsLeft() };
+  const before = { cards: total(), stock: g.state.stock.length };
 
-  const r = g.placeWild({ zone: 'col', index: 3 });
+  const target = g.state.columns.findIndex((_, i) => {
+    const v = g.wildValue(i);
+    return v && g.state.stock.some((c) => c.rank === v.rank);
+  });
+  assert.ok(target >= 0, 'the opening deal leaves the stock holding something useful');
+  const value = g.wildValue(target);
+
+  const r = g.placeWild({ zone: 'col', index: target });
   assert.equal(r.cost, 'stock');
+  assert.equal(r.removed.rank, value.rank, 'it took a copy of the rank it became');
   assert.equal(g.state.stock.length, before.stock - 1);
   assert.equal(total(), before.cards, 'a card left the game as one arrived');
   assert.equal(g.state.wilds, 1);
-  const placed = g.state.columns[3][g.state.columns[3].length - 1];
+  const placed = g.state.columns[target][g.state.columns[target].length - 1];
   assert.equal(placed.wild, true);
+  assert.equal(placed.rank, value.rank);
   assert.equal(placed.faceUp, true);
 });
 
-test('with the stock spent, a wildcard burns the worst face-down card', () => {
+test('with the stock spent, a wildcard burns a face-down copy of its own rank', () => {
   const g = rigged([
     [makeCard(2, 'spade', false), up(9, 'spade')],
     [makeCard(3, 'spade', false), makeCard(4, 'spade', false), makeCard(5, 'spade', false), up(8, 'spade')],
@@ -666,34 +675,46 @@ test('with the stock spent, a wildcard burns the worst face-down card', () => {
   const buried = () => g.state.columns.flat().filter((c) => !c.faceUp).length;
   assert.equal(buried(), 4);
 
+  // Landing on the 4 makes it a 3, so a 3 is what it has to eat.
   const r = g.placeWild({ zone: 'col', index: 2 });
   assert.equal(r.cost, 'hidden');
-  assert.equal(g.state.columns[1].length, 3, 'it came out of the most buried column');
-  assert.equal(r.removed.rank, 5, 'and it was the one nearest to being turned over');
+  assert.equal(r.removed.rank, 3, 'the copy of the rank it took');
+  assert.equal(g.state.columns[1].length, 3, 'out of the most buried column');
   assert.equal(buried(), 3, 'the dig is one shorter');
   assert.equal(g.state.columns[2].length, 2, 'and the wildcard landed where it was put');
 });
 
-test('with nothing hidden either, a wildcard consumes the card it lands on', () => {
-  const g = rigged([[up(9, 'spade'), up(4, 'spade')], [up(2, 'spade')]], { wilds: 1 });
+test('with nothing hidden either, a wildcard swallows a face-up card of its rank', () => {
+  const g = rigged([[up(9, 'spade'), up(4, 'spade')], [up(3, 'spade'), up(2, 'spade')]], { wilds: 1 });
   const r = g.placeWild({ zone: 'col', index: 0 });
-  assert.equal(r.cost, 'replaced');
-  assert.equal(r.removed.rank, 4, 'the card it landed on');
-  assert.equal(g.state.columns[0].length, 2);
-  assert.equal(g.state.columns[0][1].wild, true);
+  assert.equal(r.cost, 'faceup');
+  assert.equal(r.removed.rank, 3);
+  assert.equal(g.state.columns[1].length, 1, 'it came off the other column');
+  assert.equal(g.state.columns[0].length, 3, 'the card it landed on is untouched');
+  assert.equal(g.state.columns[0][2].rank, 3);
 });
 
-test('a wildcard cannot be paid for onto an empty column with nothing left', () => {
+test('a wildcard is refused when no copy of the rank it would take is left', () => {
   const g = rigged([[up(9, 'spade')], []], { wilds: 1 });
-  assert.equal(g.wildCost({ zone: 'col', index: 1 }), null);
+  assert.equal(g.wildCost({ zone: 'col', index: 1 }), null, 'no King anywhere to pay with');
   assert.equal(g.placeWild({ zone: 'col', index: 1 }), false);
   assert.equal(g.state.wilds, 1, 'and the wildcard is not spent');
 });
 
-test('placing a wildcard ignores rank entirely', () => {
-  const g = rigged([[up(2, 'spade')], [up(9, 'spade')]], { wilds: 1, stock: [makeCard(7, 'spade')] });
+test('a wildcard will pay out of the vault when the board has nothing left', () => {
+  const g = rigged([[up(9, 'spade'), up(4, 'spade')]], { wilds: 1 });
+  g.state.reserve = [makeCard(3, 'spade', true)];
+  const r = g.placeWild({ zone: 'col', index: 0 });
+  assert.equal(r.cost, 'vault');
+  assert.equal(g.state.reserve[0], null);
+  assert.equal(g.state.columns[0][2].rank, 3);
+});
+
+test('placing a wildcard ignores the rank it lands on', () => {
+  const g = rigged([[up(2, 'spade')], [up(9, 'spade')]], { wilds: 1, stock: [makeCard(1, 'spade')] });
   assert.equal(g.placeWild({ zone: 'col', index: 0 }).cost, 'stock');
   assert.equal(g.state.columns[0].length, 2, 'a wildcard sat on a 2');
+  assert.equal(g.state.columns[0][1].rank, 1, 'and came down as the Ace it owed');
 });
 
 test('wildcards keep the board exactly clearable', () => {
@@ -715,6 +736,36 @@ test('wildcards keep the board exactly clearable', () => {
   assert.equal(g.state.required * 13, total(), 'the runes required still account for every card');
 });
 
+// The bug this guards: a wildcard used to pay with whatever card was handiest,
+// so one arriving as a Six could eat a Nine. The count stayed right and the
+// board became unwinnable -- seven Sixes and five Nines cannot both come out
+// in six runes.
+test('every wildcard spent leaves each rank with exactly the runes left to bind', () => {
+  const g = new Game({ seed: 'COMPOSE', difficulty: 'adept' });
+  g.state.boons = { talisman: 6 };
+  g.dealRank(1);
+
+  const check = (where) => {
+    const left = g.state.required - g.state.runes;
+    const seen = new Map();
+    for (const c of [...g.state.columns.flat(), ...g.state.stock, ...g.state.reserve.filter(Boolean)]) {
+      seen.set(c.rank, (seen.get(c.rank) || 0) + 1);
+    }
+    for (let rank = 1; rank <= 13; rank++) {
+      assert.equal(seen.get(rank) || 0, left, `${RANK_LABEL[rank]} count after ${where}`);
+    }
+  };
+  check('the deal');
+
+  let spent = 0;
+  for (let pass = 0; pass < 4 && g.state.wilds; pass++) {
+    for (let i = 0; i < g.state.columns.length && g.state.wilds; i++) {
+      if (g.placeWild({ zone: 'col', index: i })) { spent++; check(`wildcard ${spent}`); }
+    }
+  }
+  assert.ok(spent >= 6, `only ${spent} wildcards found a home`);
+});
+
 test('spending a wildcard is undoable', () => {
   const g = new Game({ seed: 'UNDOWILD', difficulty: 'adept' });
   g.state.boons = { talisman: 1 };
@@ -729,7 +780,7 @@ test('spending a wildcard is undoable', () => {
 });
 
 test('a placed wildcard fixes to one below the card it lands on', () => {
-  const g = rigged([[up(9, 'spade')], [up(4, 'spade')]], { wilds: 2, stock: [makeCard(7, 'spade')] });
+  const g = rigged([[up(9, 'spade')], [up(4, 'spade')]], { wilds: 2, stock: [makeCard(8, 'spade')] });
   assert.deepEqual(g.wildValue(0), { rank: 8, suit: 'spade' });
   g.placeWild({ zone: 'col', index: 0 });
   const placed = g.state.columns[0][1];
@@ -739,13 +790,13 @@ test('a placed wildcard fixes to one below the card it lands on', () => {
 });
 
 test('a wildcard in an empty column fixes to a King', () => {
-  const g = rigged([[up(9, 'spade')], []], { wilds: 1, stock: [makeCard(7, 'spade')] });
+  const g = rigged([[up(9, 'spade')], []], { wilds: 1, stock: [makeCard(13, 'spade')] });
   g.placeWild({ zone: 'col', index: 1 });
   assert.equal(g.state.columns[1][0].rank, 13);
 });
 
 test('nothing goes below an Ace, so no wildcard lands on one', () => {
-  const g = rigged([[up(1, 'spade')], [up(5, 'spade')]], { wilds: 1, stock: [makeCard(7, 'spade')] });
+  const g = rigged([[up(1, 'spade')], [up(5, 'spade')]], { wilds: 1, stock: [makeCard(4, 'spade')] });
   assert.equal(g.wildValue(0), null);
   assert.equal(g.wildCost({ zone: 'col', index: 0 }), null);
   assert.equal(g.placeWild({ zone: 'col', index: 0 }), false);
@@ -753,13 +804,14 @@ test('nothing goes below an Ace, so no wildcard lands on one', () => {
   assert.ok(g.wildCost({ zone: 'col', index: 1 }), 'other columns are still fine');
 });
 
-test('a replacing wildcard reads the card that will be under it', () => {
-  const g = rigged([[up(9, 'spade'), up(4, 'spade')], [up(2, 'spade')]], { wilds: 1 });
+test('a wildcard never eats the card it lands on', () => {
+  const g = rigged([[up(9, 'spade'), up(4, 'spade')], [up(3, 'spade')]], { wilds: 1 });
   const plan = g.wildCost({ zone: 'col', index: 0 });
-  assert.equal(plan.cost, 'replaced');
-  assert.equal(plan.value.rank, 8, 'one below the 9 it will sit on, not the 4 it eats');
+  assert.equal(plan.value.rank, 3, 'one below the 4 it sits on');
   g.placeWild({ zone: 'col', index: 0 });
-  assert.equal(g.state.columns[0][1].rank, 8);
+  assert.equal(g.state.columns[0].length, 3);
+  assert.equal(g.state.columns[0][1].rank, 4, 'the 4 is still there');
+  assert.equal(g.state.columns[0][2].rank, 3);
 });
 
 test('a fixed wildcard is read as its rank, not as a gap filler', () => {
