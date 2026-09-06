@@ -35,6 +35,11 @@ export const DIFFICULTIES = {
 
 export const BASE_COLUMNS = 10;
 export const UNDOS_PER_RANK = 3;
+// What a player may claw back out of a rank beyond the undos it grants.
+// The caps are the game's, not the ad network's: a reward is worth taking
+// and cannot be farmed into a rank that plays itself.
+export const REPRIEVES_PER_RANK = 1;
+export const EXTRA_UNDOS_PER_RANK = 3;
 const MAX_UNDO_STACK = 60;
 
 export class Game {
@@ -57,6 +62,8 @@ export class Game {
       boons: {},              // upgrade key -> how many times taken
       wilds: 0,               // wildcards in hand, refreshed each rank
       conjured: 0,            // wildcards this rank that found nothing to eat
+      reprieves: 0,           // second winds taken this rank
+      extraUndos: 0,          // undos granted beyond the rank's own
       undosLeft: UNDOS_PER_RANK,
       moves: 0,
       offer: [],
@@ -113,6 +120,8 @@ export class Game {
     s.reserve = Array.from({ length: this.reserveCells() }, () => null);
     s.wilds = this.held('talisman') * 2;
     s.conjured = 0;
+    s.reprieves = 0;
+    s.extraUndos = 0;
     s.undosLeft = UNDOS_PER_RANK;
     s.phase = 'play';
     s.offer = [];
@@ -140,14 +149,24 @@ export class Game {
     if (this.undoStack.length > MAX_UNDO_STACK) this.undoStack.shift();
   }
 
+  /**
+   * Step back one move. What the board looked like is restored; what the
+   * player has spent or been granted is not. An undo that rolled the ledger
+   * back would refund itself, and -- once rewards can grant undos -- would let
+   * the same one be earned over and over.
+   */
   undo() {
     if (this.state.phase !== 'play') return false;
     if (!this.undoStack.length || this.state.undosLeft <= 0) return false;
     const snap = this.undoStack.pop();
-    const left = this.state.undosLeft - 1;
+    const ledger = {
+      undosLeft: this.state.undosLeft - 1,
+      extraUndos: this.state.extraUndos,
+      reprieves: this.state.reprieves,
+    };
     this.state = snap.state;
     this.rng.setState(snap.rng);
-    this.state.undosLeft = left;
+    Object.assign(this.state, ledger);
     return true;
   }
 
@@ -461,6 +480,44 @@ export class Game {
     return this.state.stock.length ? null : 'The stock is spent.';
   }
 
+  /**
+   * Is a second wind available? Only a rank that has actually ended, and only
+   * so many times, so a run cannot be carried indefinitely on reprieves.
+   */
+  canReprieve() {
+    return this.state.phase === 'failed' && this.state.reprieves < REPRIEVES_PER_RANK;
+  }
+
+  /**
+   * Bring a dead run back. A wildcard is the one thing that always unsticks a
+   * board -- it can go on any column that is not an Ace, and it is always
+   * payable -- so a reprieve is a wildcard and one more undo to use it with.
+   */
+  reprieve() {
+    if (!this.canReprieve()) return false;
+    const s = this.state;
+    s.phase = 'play';
+    s.reprieves++;
+    s.wilds++;
+    s.undosLeft++;
+    this.undoStack = [];
+    this.log('A second wind: one wildcard, and one more move to take back.');
+    return true;
+  }
+
+  /** Whether another undo can be granted this rank. */
+  canGrantUndo() {
+    return this.state.phase === 'play' && this.state.extraUndos < EXTRA_UNDOS_PER_RANK;
+  }
+
+  grantUndo() {
+    if (!this.canGrantUndo()) return false;
+    this.state.extraUndos++;
+    this.state.undosLeft++;
+    this.log('One more undo.');
+    return true;
+  }
+
   concede() {
     if (this.state.phase === 'play') {
       this.state.phase = 'failed';
@@ -691,6 +748,8 @@ export function deserialize(json) {
   game.rng.setState(data.rng);
   if (typeof state.wilds !== 'number') state.wilds = 0;
   if (typeof state.conjured !== 'number') state.conjured = 0;
+  if (typeof state.reprieves !== 'number') state.reprieves = 0;
+  if (typeof state.extraUndos !== 'number') state.extraUndos = 0;
   game.state = state;
   game.undoStack = [];
 

@@ -813,6 +813,113 @@ for (const view of VIEWS) {
     await overlayFits('the end screen');
   });
 
+  await check('with no ad host there is nothing to buy and nothing to watch', async () => {
+    // The run is still on the end screen from the check above.
+    const seen = await page.evaluate(() => ({
+      ready: window.Ascendant.ads.ready(),
+      earn: document.querySelectorAll('.earn').length,
+      support: document.querySelectorAll('.support').length,
+    }));
+    if (seen.ready) throw new Error('the web build reported an ad host');
+    if (seen.earn || seen.support) throw new Error('ad interface drawn with no host attached');
+  });
+
+  await check('a second wind revives a dead run for a rewarded ad', async () => {
+    await page.evaluate(async () => {
+      window.__ads = { rewarded: [], interstitial: 0, bought: 0 };
+      await window.Ascendant.attachAds({
+        rewarded: async (kind) => { window.__ads.rewarded.push(kind); return true; },
+        interstitial: async () => { window.__ads.interstitial++; },
+        purchase: async () => { window.__ads.bought++; return true; },
+        restore: async () => false,
+      });
+      window.Ascendant.start('ADSEED', 'adept');
+      window.Ascendant.game.concede();
+      window.Ascendant.checkPhase();
+    });
+    await page.waitForTimeout(250);
+    const offer = page.locator('.earn').first();
+    if (!(await offer.count())) throw new Error('no second wind offered on the loss screen');
+
+    const before = await page.evaluate(() => window.Ascendant.game.state.wilds);
+    await offer.click();
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => ({
+      phase: window.Ascendant.game.state.phase,
+      wilds: window.Ascendant.game.state.wilds,
+      undos: window.Ascendant.game.state.undosLeft,
+      hidden: document.querySelector('#overlay').hidden,
+      asked: window.__ads.rewarded,
+    }));
+    if (after.phase !== 'play') throw new Error('the run stayed dead');
+    if (after.wilds !== before + 1) throw new Error('no wildcard came with the second wind');
+    if (!after.hidden) throw new Error('the loss screen was left up');
+    if (after.asked[0] !== 'reprieve') throw new Error('the wrong ad was requested');
+  });
+
+  await check('running out of undos turns the button into an offer', async () => {
+    await hintOff(page);
+    const ok = await page.evaluate(() => {
+      const g = window.Ascendant.game;
+      g.state.undosLeft = 0;
+      g.deal();                       // something worth taking back
+      window.Ascendant.render();
+      const b = document.querySelector('#btn-undo');
+      return { disabled: b.disabled, earn: b.classList.contains('earn'), label: b.textContent };
+    });
+    if (ok.disabled) throw new Error('the undo button was left dead');
+    if (!ok.earn) throw new Error('the offer is not marked');
+
+    const before = await page.evaluate(() => JSON.stringify(
+      window.Ascendant.game.state.columns.map((c) => c.length)));
+    await page.click('#btn-undo');
+    await page.waitForTimeout(350);
+    const after = await page.evaluate(() => ({
+      cols: JSON.stringify(window.Ascendant.game.state.columns.map((c) => c.length)),
+      extra: window.Ascendant.game.state.extraUndos,
+      asked: window.__ads.rewarded,
+    }));
+    if (after.asked[after.asked.length - 1] !== 'undo') throw new Error('no undo ad was requested');
+    if (after.extra !== 1) throw new Error('the granted undo was not counted');
+    if (after.cols === before) throw new Error('the move was not taken back');
+  });
+
+  await check('the pause screen sells one thing, and remembers it was bought', async () => {
+    await page.evaluate(() => {
+      document.querySelector('#btn-menu').click();
+    });
+    await page.waitForTimeout(200);
+    if (!(await page.locator('.support').count())) throw new Error('nothing offered for sale');
+    await page.locator('.support button').first().click();
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => ({
+      premium: window.Ascendant.ads.isPremium(),
+      bought: window.__ads.bought,
+      text: document.querySelector('.support').textContent,
+      buttons: document.querySelectorAll('.support button').length,
+    }));
+    if (!after.bought) throw new Error('the purchase never reached the host');
+    if (!after.premium) throw new Error('the purchase did not stick');
+    if (after.buttons) throw new Error('still selling after it was bought');
+    if (!/ad-free/i.test(after.text)) throw new Error('no thanks shown to a paying player');
+  });
+
+  await check('a paying player is never interrupted between runs', async () => {
+    const runs = await page.evaluate(async () => {
+      for (let i = 0; i < 6; i++) await window.Ascendant.ads.lossBreak();
+      return window.__ads.interstitial;
+    });
+    if (runs !== 0) throw new Error(`${runs} forced breaks shown to a paying player`);
+    // Leave the context as it was found.
+    await page.evaluate(async () => {
+      localStorage.removeItem('ascendant.premium.v1');
+      localStorage.removeItem('ascendant.breaks.v1');
+      await window.Ascendant.attachAds(null);
+      window.Ascendant.start('CLEANUP', 'adept');
+    });
+    await page.waitForTimeout(200);
+  });
+
   await check('no console errors', () => {
     if (errors.length) throw new Error(errors.join(' | '));
   });

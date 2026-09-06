@@ -5,6 +5,10 @@ import { Game, RANKS, TRANSCENDENCE, DIFFICULTIES, serialize, deserialize } from
 import { SUIT_GLYPH, RANK_LABEL } from './cards.js';
 import { boonSummary } from './paths.js';
 import { randomSeed } from './rng.js';
+import {
+  adsInit, adsReady, adsPremium, canReward, playReward, lossBreak,
+  buyPremium, restorePremium, REWARDS,
+} from './ads.js';
 
 // Replaced with a content hash by build.js; stays "dev" when running from src.
 const BUILD = '__BUILD__';
@@ -326,8 +330,14 @@ function renderDock() {
   $('#seed-tag').textContent = `${game.seed} · ${DIFFICULTIES[game.difficulty].name} · ${buildTag()}`;
 
   const undo = $('#btn-undo');
-  undo.disabled = s.undosLeft <= 0 || !game.undoStack.length;
-  undo.querySelector('.label').innerHTML = `Undo <b class="count">${s.undosLeft}</b>`;
+  // Out of undos with a move worth taking back is the one moment a player
+  // wants an ad. Offer it there rather than leaving a dead button.
+  const canEarnUndo = s.undosLeft <= 0 && game.canGrantUndo() && canReward('undo');
+  undo.disabled = !game.undoStack.length || (s.undosLeft <= 0 && !canEarnUndo);
+  undo.classList.toggle('earn', canEarnUndo && !!game.undoStack.length);
+  undo.querySelector('.label').innerHTML = canEarnUndo
+    ? 'Undo <b class="count">▶</b>'
+    : `Undo <b class="count">${s.undosLeft}</b>`;
   $('#btn-hint').disabled = s.phase !== 'play';
   $('#btn-hint').classList.toggle('armed', !!hint);
   $('#btn-deal').disabled = !game.canDeal();
@@ -960,6 +970,37 @@ function rulesHtml() {
   </details>`;
 }
 
+/**
+ * The one thing there is to buy. Absent entirely where nothing can be sold --
+ * the web build draws no shop, no ads and no mention of either.
+ */
+function supportRow() {
+  if (!adsReady()) return null;
+  const box = el('div', 'support');
+  if (adsPremium()) {
+    box.appendChild(el('p', 'fine', 'Ad-free. Thank you for supporting the climb.'));
+    return box;
+  }
+  const buy = el('button', '', 'Remove ads');
+  buy.onclick = async () => {
+    buy.disabled = true;
+    const ok = await buyPremium();
+    buy.disabled = false;
+    toast(ok ? 'Ad-free. Thank you' : 'Purchase not completed');
+    if (ok) pauseScreen();
+  };
+  const restore = el('button', 'quiet', 'Restore');
+  restore.style.marginLeft = '8px';
+  restore.onclick = async () => {
+    const ok = await restorePremium();
+    toast(ok ? 'Purchase restored' : 'Nothing to restore');
+    if (ok) pauseScreen();
+  };
+  box.append(buy, restore);
+  box.appendChild(el('p', 'fine', 'One payment. Removes the breaks between runs; rewards stay yours to take.'));
+  return box;
+}
+
 function pauseScreen() {
   const p = el('div', 'panel');
   p.appendChild(el('div', 'mark-big', '❖'));
@@ -982,6 +1023,8 @@ function pauseScreen() {
   quit.onclick = () => { titleScreen(); };
   row.append(resume, quit);
   p.appendChild(row);
+  const shop = supportRow();
+  if (shop) p.appendChild(shop);
   p.insertAdjacentHTML('beforeend', rulesHtml());
   overlay(p);
 }
@@ -1097,14 +1140,41 @@ function endScreen(won) {
   }
   p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b> · ${DIFFICULTIES[game.difficulty].name}`));
 
+  // The run is over, so a break is due if the count says so. It runs on the
+  // way out, never over the tally the player is still reading.
+  const leave = (go) => async () => {
+    await lossBreak();
+    go();
+  };
+
+  if (!won && game.canReprieve() && canReward('reprieve')) {
+    const wind = el('button', 'big earn', `▶ ${REWARDS.reprieve.label}`);
+    wind.onclick = async () => {
+      wind.disabled = true;
+      const earned = await playReward('reprieve');
+      if (!earned) { wind.disabled = false; toast('The core stays dark'); return; }
+      game.reprieve();
+      shownPhase = 'play';
+      closeOverlay();
+      render();
+      save();
+      toast('A wildcard, and one more undo');
+    };
+    const windRow = el('div');
+    windRow.style.margin = '14px 0 2px';
+    windRow.appendChild(wind);
+    p.appendChild(windRow);
+    p.appendChild(el('p', 'fine', REWARDS.reprieve.blurb));
+  }
+
   const again = el('button', 'big', 'Climb again');
   again.style.marginRight = '10px';
-  again.onclick = () => start(randomSeed(), game.difficulty);
+  again.onclick = leave(() => start(randomSeed(), game.difficulty));
   const retry = el('button', '', 'Retry this seed');
-  retry.onclick = () => start(game.seed, game.difficulty);
+  retry.onclick = leave(() => start(game.seed, game.difficulty));
   const menu = el('button', '', 'Main menu');
   menu.style.marginLeft = '10px';
-  menu.onclick = titleScreen;
+  menu.onclick = leave(titleScreen);
   const row = el('div');
   row.style.marginTop = '10px';
   row.append(again, retry, menu);
@@ -1153,6 +1223,13 @@ function loadSaved() {
   return restored;
 }
 
+// ads.js takes any get/set pair; in the browser that is localStorage, and a
+// native wrapper hands in its own key-value store instead.
+const webStore = {
+  get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* private browsing */ } },
+};
+
 function save() {
   try {
     if (game.state.phase === 'play' || game.state.phase === 'breakthrough') {
@@ -1174,8 +1251,14 @@ function bindChrome() {
   $('#stock').addEventListener('click', doDeal);
   $('#btn-deal').addEventListener('click', doDeal);
   $('#btn-paths').addEventListener('click', () => { stopHint(); pauseScreen(); });
-  $('#btn-undo').addEventListener('click', () => {
-    if (game && game.undo()) afterAction();
+  $('#btn-undo').addEventListener('click', async () => {
+    if (!game) return;
+    if (game.state.undosLeft <= 0) {
+      if (!game.undoStack.length || !game.canGrantUndo() || !canReward('undo')) return;
+      if (!(await playReward('undo'))) { toast('No undo earned'); return; }
+      game.grantUndo();
+    }
+    if (game.undo()) afterAction();
   });
   $('#btn-menu').addEventListener('click', () => {
     stopHint();
@@ -1219,5 +1302,19 @@ export function boot() {
     start,
     render,
     checkPhase,
+    ads: { ready: adsReady, isPremium: adsPremium, canReward, lossBreak },
+    /**
+     * Attach a host's ad and purchase bridge, then redraw what it unlocks.
+     * A native wrapper passes its own store too, so a purchase outlives the
+     * web cache; on the web it is localStorage.
+     */
+    async attachAds(provider, store = webStore) {
+      await adsInit({ provider, store });
+      if (game && $('#overlay').hidden) render();
+      return adsReady();
+    },
   };
+  // A native wrapper installs its bridge on the window before the page boots;
+  // on the web there is nothing to find, and every ad path stays shut.
+  window.Ascendant.attachAds(window.AscendantAds || null);
 }

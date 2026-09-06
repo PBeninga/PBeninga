@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, RANKS, BASE_COLUMNS, DIFFICULTIES, serialize, deserialize } from '../src/engine.js';
+import {
+  Game, RANKS, BASE_COLUMNS, DIFFICULTIES, serialize, deserialize,
+  UNDOS_PER_RANK, REPRIEVES_PER_RANK, EXTRA_UNDOS_PER_RANK,
+} from '../src/engine.js';
 import { makeCard, makeWild, SEQUENCE_LENGTH, RANK_LABEL } from '../src/cards.js';
 
 const up = (rank, suit) => makeCard(rank, suit, true);
@@ -859,4 +862,97 @@ test('a fixed wildcard can complete a rune as its rank', () => {
   const g = rigged([col, [up(1, 'spade')], [up(9, 'spade')], [up(8, 'heart')]]);
   g.move({ zone: 'col', index: 1, count: 1 }, { zone: 'col', index: 0 });
   assert.equal(g.state.totalRunes, 1);
+});
+
+// ------------------------------------------------------------- reprieves
+
+test('a second wind restarts a dead run with the one thing that unsticks it', () => {
+  const g = rigged([[up(9, 'spade')], [up(4, 'spade')]]);
+  g.concede();
+  assert.equal(g.state.phase, 'failed');
+  assert.equal(g.canReprieve(), true);
+
+  const wilds = g.state.wilds;
+  assert.equal(g.reprieve(), true);
+  assert.equal(g.state.phase, 'play');
+  assert.equal(g.state.wilds, wilds + 1, 'a wildcard, which always has somewhere to go');
+  assert.equal(g.state.undosLeft, UNDOS_PER_RANK + 1);
+  assert.ok(g.wildCost({ zone: 'col', index: 0 }), 'and it can be spent immediately');
+});
+
+test('a rank grants only so many second winds', () => {
+  const g = rigged([[up(9, 'spade')]]);
+  for (let i = 0; i < REPRIEVES_PER_RANK; i++) {
+    g.concede();
+    assert.equal(g.reprieve(), true);
+  }
+  g.concede();
+  assert.equal(g.canReprieve(), false, 'the rank is spent');
+  assert.equal(g.reprieve(), false);
+  assert.equal(g.state.phase, 'failed', 'and the run stays dead');
+});
+
+test('a second wind cannot be taken on a run that has not ended', () => {
+  const g = rigged([[up(9, 'spade')]]);
+  assert.equal(g.state.phase, 'play');
+  assert.equal(g.canReprieve(), false);
+  assert.equal(g.reprieve(), false);
+});
+
+test('a fresh rank restores the second wind', () => {
+  const g = new Game({ seed: 'WIND', difficulty: 'adept' });
+  g.concede();
+  g.reprieve();
+  assert.equal(g.state.reprieves, 1);
+  g.dealRank(2);
+  assert.equal(g.state.reprieves, 0);
+  assert.equal(g.state.extraUndos, 0);
+});
+
+test('granted undos are capped per rank and really are undos', () => {
+  const g = new Game({ seed: 'MOREUNDO', difficulty: 'adept' });
+  for (let i = 0; i < EXTRA_UNDOS_PER_RANK; i++) assert.equal(g.grantUndo(), true);
+  assert.equal(g.state.undosLeft, UNDOS_PER_RANK + EXTRA_UNDOS_PER_RANK);
+  assert.equal(g.canGrantUndo(), false, 'the rank is out of extras');
+  assert.equal(g.grantUndo(), false);
+
+  const before = JSON.stringify(g.state.columns.map((c) => c.map((x) => x.id)));
+  g.deal();
+  assert.equal(g.undo(), true);
+  assert.equal(JSON.stringify(g.state.columns.map((c) => c.map((x) => x.id))), before);
+});
+
+test('a run that took a second wind still saves and resumes', () => {
+  const g = new Game({ seed: 'WINDSAVE', difficulty: 'adept' });
+  g.concede();
+  g.reprieve();
+  g.grantUndo();
+  const back = deserialize(serialize(g));
+  assert.ok(back, 'the save survives');
+  assert.equal(back.state.phase, 'play');
+  assert.equal(back.state.reprieves, 1);
+  assert.equal(back.state.extraUndos, 1);
+  assert.equal(back.canReprieve(), false, 'and the rank remembers it was spent');
+});
+
+test('an undo steps the board back without refunding what was granted', () => {
+  const g = new Game({ seed: 'LEDGER', difficulty: 'adept' });
+  g.state.undosLeft = 0;
+  g.deal();
+  assert.equal(g.grantUndo(), true);
+  assert.equal(g.state.extraUndos, 1);
+  assert.equal(g.undo(), true);
+  assert.equal(g.state.extraUndos, 1, 'the grant is not rolled back');
+  assert.equal(g.state.undosLeft, 0, 'and it was really spent');
+});
+
+test('granted undos cannot be farmed by undoing the grant away', () => {
+  const g = new Game({ seed: 'FARM', difficulty: 'adept' });
+  g.state.undosLeft = 0;
+  for (let i = 0; i < EXTRA_UNDOS_PER_RANK + 3; i++) {
+    g.deal();
+    if (g.canGrantUndo()) g.grantUndo();
+    g.undo();
+  }
+  assert.equal(g.state.extraUndos, EXTRA_UNDOS_PER_RANK, 'the cap held across undos');
 });

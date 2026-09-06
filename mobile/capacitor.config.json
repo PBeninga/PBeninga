@@ -1,0 +1,11 @@
+{
+  "appId": "com.pbeninga.ascendant",
+  "appName": "Ascendant",
+  "webDir": "dist/www",
+  "bundledWebRuntime": false,
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "never" },
+  "plugins": {
+    "SplashScreen": { "launchAutoHide": true, "backgroundColor": "#0a1015" }
+  }
+}

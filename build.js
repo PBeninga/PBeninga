@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const MODULES = ['rng.js', 'cards.js', 'paths.js', 'engine.js', 'ui.js'];
+const MODULES = ['rng.js', 'cards.js', 'paths.js', 'engine.js', 'ads.js', 'ui.js'];
 
 function stripModuleSyntax(src) {
   return src
@@ -53,6 +53,11 @@ ${style}</head>
 ${body}${script}</body>
 </html>
 `);
+
+// The native wrapper's web root. Capacitor copies this directory into the app
+// bundle, so the shipped game is the same single file the web gets.
+mkdirSync(join(root, 'dist', 'www'), { recursive: true });
+writeFileSync(join(root, 'dist', 'www', 'index.html'), readFileSync(join(root, 'dist', 'index.html'), 'utf8'));
 
 // Body-only fragment, for hosts that supply their own document shell.
 writeFileSync(join(root, 'dist', 'artifact.html'), `<title>${title}</title>\n${style}${body}${script}`);

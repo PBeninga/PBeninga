@@ -210,3 +210,13 @@ Known open questions:
 - Nothing tells you what a wildcard is about to cost, or what rank it will
   take, before you spend it. The deck's tooltip explains the order; the board
   shows neither the card that would go nor the value that would be taken.
+
+## Monetization
+
+The game is free of ads and purchases on the web: `src/ads.js` only does
+anything when a host attaches a provider, and nothing does on the web. A native
+wrapper attaches one, which turns on two rewarded offers (a second wind on a
+dead run, one more undo), a frequency-capped interstitial between runs, and a
+one-off purchase that removes the interstitials.
+
+See `docs/MOBILE.md` for the iOS/Android build and what still needs a Mac.

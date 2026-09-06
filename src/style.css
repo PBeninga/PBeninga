@@ -576,3 +576,12 @@ details.rules-toggle[open] > summary::after { content: ' ▴'; }
   #seed-tag { display: none; }
   #status { font-size: 11px; }
 }
+
+/* --------------------------------------------------------------- support */
+/* Anything that costs the player an ad or a payment is marked, and marked the
+   same way everywhere: the gold outline the game already uses for a choice. */
+button.earn { border-color: var(--gold); box-shadow: 0 0 18px rgba(232, 189, 106, .22); }
+.dock button.earn .count { color: var(--gold); }
+button.quiet { opacity: .75; }
+.support { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(232, 189, 106, .18); }
+.support .fine, p.fine { margin: 8px 0 0; font-size: 12px; opacity: .68; letter-spacing: .04em; }
