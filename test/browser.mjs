@@ -286,8 +286,20 @@ for (const view of VIEWS) {
   });
 
   await check('the hint carousel cycles and reports its position', async () => {
+    await stash(page);
+    // Rig a board that definitely offers more than one worthwhile move, rather
+    // than depending on whatever the deal happened to produce.
     const plan = await page.evaluate(() => {
-      const s = window.Ascendant.game.suggest();
+      const g = window.Ascendant.game;
+      const card = (id, rank) => ({ id, rank, suit: 'spade', faceUp: true, wild: false });
+      g.state.columns = g.state.columns.map(() => []);
+      g.state.columns[0] = [card(9700, 9), card(9701, 8)];
+      g.state.columns[1] = [card(9702, 10)];
+      g.state.columns[2] = [card(9703, 4), card(9704, 3)];
+      g.state.columns[3] = [card(9705, 5)];
+      g.state.reserve = [];
+      window.Ascendant.render();
+      const s = g.suggest();
       return { kind: s.kind, total: s.moves.length };
     });
     if (plan.kind !== 'moves') throw new Error('expected move suggestions, got ' + plan.kind);
@@ -323,6 +335,7 @@ for (const view of VIEWS) {
     const second = await page.evaluate(() => document.querySelector('#status').textContent);
     if (second !== `Showing hint 2/${total}`) throw new Error('did not advance, read "' + second + '"');
     await hintOff(page);
+    await unstash(page);
   });
 
   await check('an empty column does not stop the stock', async () => {

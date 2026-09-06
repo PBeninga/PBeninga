@@ -4,9 +4,9 @@ A progression-fantasy roguelike played in Spider solitaire.
 
 Every card is a spade. Clearing a whole board of **K→A runs** is an
 advancement — take a boon, and the next rank deals *one more sequence than the
-last*, every one of which has to go into the core. Ember opens on two full
-decks. Sovereign is a 169-card board. The boons you take are the only thing
-that closes that gap.
+last*, every one of which has to go into the core. Ember opens on a deck and a
+half. Sovereign is a 143-card board. The boons you take are the only thing that
+closes that gap.
 
 No dependencies, no build step. Open `index.html` in a browser and play.
 
@@ -32,22 +32,21 @@ last**, and all of them must go.
 
 | Rank | Sequences to clear | Cards |
 |---|---|---|
-| I **Ember** | 8 | 104 |
-| II **Iron** | 9 | 117 |
-| III **Silver** | 10 | 130 |
-| IV **Gold** | 11 | 143 |
-| V **Radiant** | 12 | 156 |
-| VI **Sovereign** | 13 | 169 |
+| I **Ember** | 6 | 78 |
+| II **Iron** | 7 | 91 |
+| III **Silver** | 8 | 104 |
+| IV **Gold** | 9 | 117 |
+| V **Radiant** | 10 | 130 |
+| VI **Sovereign** | 11 | 143 |
 | — **Transcendence** | *you win* | — |
 
-Five advancements means **five boons** in a full run — sixty-three sequences on
-Adept, from a classic two-deck single-suit Spider board up to something half
-again as deep.
+Five advancements means **five boons** in a full run — fifty-one sequences on
+Adept. Silver is the classic two-deck single-suit Spider board; everything
+before it is smaller and everything after is deeper.
 
 With one suit, the deck's depth is the only dial left, so it is the one the
-difficulties turn: **Novice** opens on 7 sequences, **Adept** on 8 (two full
-decks — the classic single-suit Spider board), **Merciless** on 10. Each adds
-one per rank from there.
+difficulties turn: **Novice** opens on 5 sequences, **Adept** on 6, **Merciless**
+on 8. Each adds one per rank from there.
 
 ## Solitaire rules
 
@@ -171,29 +170,30 @@ never parks a card in a slot), 60 runs per difficulty:
 
 | | clears Ember | avg rank reached | transcended |
 |---|---|---|---|
-| Novice | 8% | 1.1 | 0/60 |
-| Adept | 7% | 1.1 | 0/60 |
-| Merciless | 2% | 1.0 | 0/60 |
+| Novice | 38% | 1.5 | 0/60 |
+| Adept | 17% | 1.2 | 0/60 |
+| Merciless | 7% | 1.1 | 0/60 |
 
-**Do not read that as the game getting harder.** Single-suit is the forgiving
-Spider variant — strong players win that board most of the time, and Ember is
-exactly it. What collapsed is the bot: clearing *every* sequence off a 104-card
-board needs planning several moves out, and it has none. It used to clear a
-52-card board 43% of the time and now clears one twice the size 7% of the time,
-which is about what a greedy heuristic should do.
+Half a deck off the opening moved the bot a long way: Novice went from 8% to
+38%, Adept from 7% to 17%. That is worth reading carefully. It does not say the
+game is now three times easier for a person — it says **the bot's clear rate is
+mostly a function of board size**, which is what a greedy heuristic with no
+lookahead would be. Single-suit Spider is the forgiving variant, and a person
+clears the standard board most of the time; the bot cannot clear a smaller one
+half the time.
 
-So these numbers no longer measure the game. Getting a figure worth trusting
-needs either a solver with real lookahead or a person playing it, and the
-second is cheaper. The knobs meanwhile are `DIFFICULTIES.startSets` and
-`rankConfig()` in `src/engine.js`.
+So the table still measures the bot more than the game. It is useful for one
+thing only: comparing two builds of *this* game against each other. Getting a
+number that means something about play needs a solver with real lookahead or a
+person, and the second is cheaper.
 
 Two things follow, and both are yours to call:
 
-- **Sovereign is a 169-card board** where all thirteen sequences must go.
+- **Sovereign is a 143-card board** where all eleven sequences must go.
   Single-suit Spider is a game strong players win most of the time, but this
-  is two and a half times the standard deal.
-- **Ember is a real commitment** rather than a tutorial: a full two-deck board
-  before you see a single boon.
+  is still nearly half again the standard deal.
+- **Ember is a 78-card board** before you see a single boon — smaller than the
+  standard Spider deal, but still a whole game.
 
 If either bites, the knobs are `DIFFICULTIES` (`startSets` and the `suits`
 ramp) and `rankConfig()` in `src/engine.js`. Dropping to four ranks, or a shallower
@@ -201,7 +201,7 @@ opening deck, would both help.
 
 Known open questions:
 
-- A full Adept run is 63 sequences across six ranks. Six ranks may want to be
+- A full Adept run is 51 sequences across six ranks. Six ranks may want to be
   four.
 - With two upgrades and five picks, a run has only six possible builds. That is
   a clean decision but a shallow one; it may want a third option.

@@ -25,12 +25,12 @@ export const TRANSCENDENCE = { name: 'Transcendence', mark: '✧' };
 // be bound. That is what "one more sequence each time" means in practice.
 //
 // Every card is a spade. With suits gone, the deck's depth is the only dial
-// left, so it is what the difficulties turn: Adept opens on two full decks,
-// which is the classic single-suit Spider board.
+// left, so it is what the difficulties turn. Adept opens on a deck and a half
+// and reaches the classic two-deck Spider board at its third rank.
 export const DIFFICULTIES = {
-  novice: { name: 'Novice', startSets: 7 },
-  adept: { name: 'Adept', startSets: 8 },
-  immortal: { name: 'Merciless', startSets: 10 },
+  novice: { name: 'Novice', startSets: 5 },
+  adept: { name: 'Adept', startSets: 6 },
+  immortal: { name: 'Merciless', startSets: 8 },
 };
 
 export const BASE_COLUMNS = 10;
