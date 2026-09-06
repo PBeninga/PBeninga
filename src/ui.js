@@ -539,6 +539,7 @@ function spendWild(index) {
     hidden: 'burned out of a face-down pile',
     faceup: 'swallowed off the board',
     vault: 'drawn out of the vault',
+    free: 'conjured — nothing left to pay with',
   }[result.cost]}`);
   afterAction(game.state.lastSealed || []);
   return true;
@@ -946,9 +947,9 @@ function rulesHtml() {
         <b>fixes</b> to one below whatever it sits on (a King in an empty column) and is an ordinary
         card after that. Nothing goes below an Ace, so no wildcard lands on one.</li>
         <li>Paying for it <b>takes a card of that same rank</b> out of the game — the stock first,
-        then a face-down one, then one on the board — so every rank keeps exactly as many copies
-        as there are runes left, and the deal stays clearable. A rank with none left cannot be
-        conjured.</li>
+        then a face-down one, then one on the board, last the vault — so every rank keeps exactly
+        as many copies as there are runes left, and the deal stays clearable. If no copy is left
+        anywhere, the wildcard is conjured free.</li>
         <li>A <b>vault slot</b> holds one card off the board. Drag a card in; tap it to send it back.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
         <li>Stuck? <b>Hint</b> walks every move the position offers, one a

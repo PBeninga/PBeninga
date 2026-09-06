@@ -8,8 +8,8 @@ export const UPGRADES = [
     sigil: '✦',
     each: '+2 wildcards in hand',
     desc: 'Two more each rank. Drop one anywhere; it fixes to one below what '
-      + 'it lands on, and eats the last copy of that same rank — stock '
-      + 'first, then a buried one, then one on the board.',
+      + 'it lands on and eats a copy of that same rank — stock first, then '
+      + 'a buried one, then one on the board. Never the card it sits on.',
   },
   {
     key: 'cell',

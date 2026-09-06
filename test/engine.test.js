@@ -694,11 +694,41 @@ test('with nothing hidden either, a wildcard swallows a face-up card of its rank
   assert.equal(g.state.columns[0][2].rank, 3);
 });
 
-test('a wildcard is refused when no copy of the rank it would take is left', () => {
+// A matched payment cannot leave a rank at zero while runes remain, so this
+// only happens on a board that was already short. Refusing the placement would
+// strand the player for a shortfall that is not their doing; the wildcard is
+// conjured instead, and the save check is told a card was added.
+test('a wildcard with nothing to eat is conjured rather than refused', () => {
   const g = rigged([[up(9, 'spade')], []], { wilds: 1 });
-  assert.equal(g.wildCost({ zone: 'col', index: 1 }), null, 'no King anywhere to pay with');
-  assert.equal(g.placeWild({ zone: 'col', index: 1 }), false);
-  assert.equal(g.state.wilds, 1, 'and the wildcard is not spent');
+  const plan = g.wildCost({ zone: 'col', index: 1 });
+  assert.equal(plan.cost, 'free', 'no King anywhere to pay with');
+  const r = g.placeWild({ zone: 'col', index: 1 });
+  assert.equal(r.cost, 'free');
+  assert.equal(r.removed, null, 'nothing was taken out of the game');
+  assert.equal(g.state.columns[1][0].rank, 13, 'and it still came down a King');
+  assert.equal(g.state.wilds, 0, 'the wildcard is spent');
+  assert.equal(g.state.conjured, 1);
+});
+
+test('a conjured wildcard is counted so the save still checks out', () => {
+  const g = new Game({ seed: 'CONJURE', difficulty: 'adept' });
+  g.state.boons = { talisman: 1 };
+  g.dealRank(1);
+  // Rewrite every Six as a Seven: the card count is untouched, but a wildcard
+  // becoming a Six now has nothing of its own rank to take.
+  for (const c of [...g.state.columns.flat(), ...g.state.stock]) if (c.rank === 6) c.rank = 7;
+  const target = g.state.columns.findIndex((c) => c.length && c[c.length - 1].faceUp && c[c.length - 1].rank === 7);
+  assert.ok(target >= 0, 'somewhere to land it');
+  const before = g.state.columns.flat().length + g.state.stock.length;
+
+  const r = g.placeWild({ zone: 'col', index: target });
+  assert.equal(r.cost, 'free');
+  assert.equal(g.state.columns.flat().length + g.state.stock.length, before + 1, 'a card was added');
+  assert.equal(g.state.conjured, 1);
+
+  const back = deserialize(serialize(g));
+  assert.ok(back, 'the save survives the extra card');
+  assert.equal(back.state.conjured, 1);
 });
 
 test('a wildcard will pay out of the vault when the board has nothing left', () => {

@@ -56,6 +56,7 @@ export class Game {
       stock: [],
       boons: {},              // upgrade key -> how many times taken
       wilds: 0,               // wildcards in hand, refreshed each rank
+      conjured: 0,            // wildcards this rank that found nothing to eat
       undosLeft: UNDOS_PER_RANK,
       moves: 0,
       offer: [],
@@ -111,6 +112,7 @@ export class Game {
     s.stock = deck;
     s.reserve = Array.from({ length: this.reserveCells() }, () => null);
     s.wilds = this.held('talisman') * 2;
+    s.conjured = 0;
     s.undosLeft = UNDOS_PER_RANK;
     s.phase = 'play';
     s.offer = [];
@@ -276,7 +278,7 @@ export class Game {
 
   /**
    * Which copy of `rank` a wildcard becoming that rank would swallow, or null
-   * if the board holds none.
+   * if the board holds none -- in which case the wildcard comes free.
    *
    * It has to be that rank and nothing else. A board clears only while every
    * rank has exactly as many copies left as there are runes still to bind, so
@@ -335,8 +337,11 @@ export class Game {
     if (!to || to.zone !== 'col' || !s.columns[to.index]) return null;
     const value = this.wildValue(to.index);
     if (!value) return null;
-    const payment = this.wildPayment(value.rank);
-    return payment ? { ...payment, value } : null;
+    // No copy of that rank anywhere is a state a matched payment cannot
+    // produce, so it means the deal is already short one. Conjure it rather
+    // than refuse a placement the player has every reason to expect.
+    const payment = this.wildPayment(value.rank) || { cost: 'free' };
+    return { ...payment, value };
   }
 
   /**
@@ -347,10 +352,12 @@ export class Game {
    * Paying for it takes one card of that same rank out of the game, so the
    * deal stays exactly clearable however many wildcards are spent: the
    * wildcard is not a card gained, it is a card moved to where you need it.
-   * An Ace has nothing below it, so a wildcard cannot be dropped on one, and
-   * a rank with no copy left anywhere cannot be conjured.
+   * An Ace has nothing below it, so a wildcard cannot be dropped on one --
+   * that is the only refusal. If no copy of the rank is left to pay with the
+   * wildcard is simply conjured, since a board short of a rank was already
+   * one rune short of finishing.
    *
-   * @returns {false|{cost:'stock'|'hidden'|'faceup'|'vault', removed:object, value:object}}
+   * @returns {false|{cost:'stock'|'hidden'|'faceup'|'vault'|'free', removed:?object, value:object}}
    */
   placeWild(to) {
     const s = this.state;
@@ -358,8 +365,9 @@ export class Game {
     if (!plan) return false;
 
     this.pushUndo();
-    let removed;
-    if (plan.cost === 'stock') removed = s.stock.splice(plan.index, 1)[0];
+    let removed = null;
+    if (plan.cost === 'free') s.conjured++;
+    else if (plan.cost === 'stock') removed = s.stock.splice(plan.index, 1)[0];
     else if (plan.cost === 'vault') { removed = s.reserve[plan.slot]; s.reserve[plan.slot] = null; }
     else removed = s.columns[plan.column].splice(plan.index, 1)[0];
 
@@ -372,6 +380,7 @@ export class Game {
       hidden: `A wildcard settles as ${label}, burning a face-down one away.`,
       faceup: `A wildcard settles as ${label}, swallowing the last one on the board.`,
       vault: `A wildcard settles as ${label}, drawn out of the vault.`,
+      free: `A wildcard settles as ${label}. Nothing was left to pay with, so it comes free.`,
     }[plan.cost]);
     this.settle();
     return { cost: plan.cost, removed, value: plan.value };
@@ -681,12 +690,15 @@ export function deserialize(json) {
   game.rng = makeRng(data.seed);
   game.rng.setState(data.rng);
   if (typeof state.wilds !== 'number') state.wilds = 0;
+  if (typeof state.conjured !== 'number') state.conjured = 0;
   game.state = state;
   game.undoStack = [];
 
   const inPlay = [...state.columns.flat(), ...state.stock, ...state.reserve.filter(Boolean)];
   const cfg = game.rankConfig(state.rank);
-  if (inPlay.length + SEQUENCE_LENGTH * state.runes !== cfg.sets * SEQUENCE_LENGTH + cfg.wilds) {
+  // A conjured wildcard is a card the deal never held, so it counts here.
+  const dealt = cfg.sets * SEQUENCE_LENGTH + cfg.wilds + state.conjured;
+  if (inPlay.length + SEQUENCE_LENGTH * state.runes !== dealt) {
     return null;
   }
   state.required = cfg.required;
