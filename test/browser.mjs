@@ -1167,6 +1167,100 @@ for (const view of VIEWS) {
     await page.waitForTimeout(200);
   });
 
+  await check("today's board is the same board, and the run is recorded", async () => {
+    await hintOff(page);
+    const first = await page.evaluate(() => {
+      localStorage.removeItem('ascendant/history');
+      localStorage.removeItem('ascendant/daily');
+      window.Ascendant.startDaily();
+      const g = window.Ascendant.game;
+      return { seed: g.seed, difficulty: g.difficulty,
+        cards: g.state.columns.flat().map((c) => c.rank).join(',') };
+    });
+    if (!/^DAILY\d{8}$/.test(first.seed)) throw new Error('daily seed read "' + first.seed + '"');
+    if (first.difficulty !== 'adept') throw new Error('the daily must be one difficulty for all');
+
+    const second = await page.evaluate(() => {
+      window.Ascendant.startDaily();
+      const g = window.Ascendant.game;
+      return g.state.columns.flat().map((c) => c.rank).join(',');
+    });
+    if (second !== first.cards) throw new Error('the same day dealt a different board');
+
+    // Finishing it files a result and starts the streak.
+    const after = await page.evaluate(() => {
+      window.Ascendant.game.concede();
+      window.Ascendant.checkPhase();
+      return { daily: JSON.parse(localStorage.getItem('ascendant/daily') || '{}'),
+        runs: JSON.parse(localStorage.getItem('ascendant/history') || '[]'),
+        pips: (document.querySelector('.share-text, .pips') || {}).textContent || '' };
+    });
+    if (after.daily.streak !== 1) throw new Error('the streak did not start');
+    if (after.runs.length !== 1) throw new Error('the run was not recorded');
+    if (!after.runs[0].daily) throw new Error('the run was not marked as the daily');
+    if (!/[🟨🟦⬜]/.test(after.pips)) throw new Error('no share card shown: "' + after.pips + '"');
+  });
+
+  await check('a replayed daily does not overwrite what you got', async () => {
+    const out = await page.evaluate(() => {
+      window.Ascendant.startDaily();
+      const g = window.Ascendant.game;
+      g.state.totalRunes = 99;              // a much better second attempt
+      g.concede();
+      window.Ascendant.checkPhase();
+      const daily = JSON.parse(localStorage.getItem('ascendant/daily') || '{}');
+      return { runes: Object.values(daily.results)[0].runes, streak: daily.streak,
+        runs: JSON.parse(localStorage.getItem('ascendant/history') || '[]').length };
+    });
+    if (out.runes === 99) throw new Error('the replay rewrote the day');
+    if (out.streak !== 1) throw new Error('the replay moved the streak');
+    if (out.runs !== 2) throw new Error('the replay was not logged as a run');
+  });
+
+  await check('the record screen shows what has been played', async () => {
+    await page.evaluate(() => window.Ascendant.recordsScreen());
+    await page.waitForTimeout(150);
+    const seen = await page.evaluate(() => ({
+      text: document.querySelector('#overlay .panel').innerText,
+      rows: document.querySelectorAll('table.records tr').length,
+    }));
+    if (!/Records/i.test(seen.text)) throw new Error('no record screen');
+    if (!/Daily streak/i.test(seen.text)) throw new Error('the streak is not shown');
+    if (seen.rows < 2) throw new Error('no runs listed');
+    await overlayFits('the record screen');
+    await page.evaluate(() => document.querySelector('#overlay .big').click());
+    await page.waitForTimeout(150);
+  });
+
+  await check('sound can be turned off, and stays off', async () => {
+    await page.evaluate(() => {
+      localStorage.removeItem('ascendant/sound');
+      window.Ascendant.start('SOUND', 'adept');
+      document.querySelector('#btn-menu').click();
+    });
+    await page.waitForTimeout(200);
+    const before = await page.evaluate(() =>
+      [...document.querySelectorAll('#overlay button')].find((b) => /sound/i.test(b.textContent)).textContent);
+    if (!/on/i.test(before)) throw new Error('sound did not start on: ' + before);
+
+    await page.evaluate(() =>
+      [...document.querySelectorAll('#overlay button')].find((b) => /sound/i.test(b.textContent)).click());
+    await page.waitForTimeout(200);
+    const after = await page.evaluate(() => ({
+      label: [...document.querySelectorAll('#overlay button')].find((b) => /sound/i.test(b.textContent)).textContent,
+      saved: localStorage.getItem('ascendant/sound'),
+    }));
+    if (!/off/i.test(after.label)) throw new Error('the switch did not flip: ' + after.label);
+    if (after.saved !== 'off') throw new Error('the choice was not saved');
+    await page.evaluate(() => {
+      localStorage.removeItem('ascendant/sound');
+      localStorage.removeItem('ascendant/history');
+      localStorage.removeItem('ascendant/daily');
+      window.Ascendant.start('CLEANUP2', 'adept');
+    });
+    await page.waitForTimeout(150);
+  });
+
   await check('no console errors', () => {
     if (errors.length) throw new Error(errors.join(' | '));
   });

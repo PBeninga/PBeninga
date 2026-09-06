@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const MODULES = ['rng.js', 'cards.js', 'paths.js', 'engine.js', 'ads.js', 'ui.js'];
+const MODULES = ['rng.js', 'cards.js', 'paths.js', 'engine.js', 'ads.js', 'sound.js', 'records.js', 'ui.js'];
 
 function stripModuleSyntax(src) {
   return src

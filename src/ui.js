@@ -9,6 +9,13 @@ import {
   adsInit, adsReady, adsPremium, canReward, playReward, lossBreak,
   buyPremium, restorePremium, REWARDS,
 } from './ads.js';
+import {
+  soundSetup, soundOn, setSoundOn, playSound, buzz,
+} from './sound.js';
+import {
+  dayKey, dailySeed, dayLabel, addRun, readRuns, summarise,
+  readDaily, noteDaily, playedToday, shareText,
+} from './records.js';
 
 // Replaced with a content hash by build.js; stays "dev" when running from src.
 const BUILD = '__BUILD__';
@@ -35,6 +42,8 @@ let offsets = { up: 0, down: 0 };
 let shownPhase = 'play';   // so a burst fires on the change, not on every check
 let wildArmed = false;
 let wildDrag = null;
+let dailyRun = null;      // the day this run is the daily for, or null
+let filed = false;        // this run has already gone into the record
 
 // How far above the fingertip a dragged stack floats, so it stays visible.
 const TOUCH_LIFT = 38;
@@ -218,6 +227,8 @@ function paintCore(colour) {
 function coreBurst(nextColour) {
   const core = $('#core');
   if (!core) return;
+  playSound('burst');
+  buzz([0, 30, 40, 60]);
   const size = Math.max(core.getBoundingClientRect().width, 30);
   const reach = Math.max(window.innerWidth, window.innerHeight) * 1.25;
 
@@ -577,6 +588,8 @@ function spendWild(index) {
   if (!result) return false;
   wildArmed = false;
   markWildTargets(false);
+  playSound('move');
+  buzz(8);
   const rank = RANK_LABEL[result.value.rank];
   toast(`${rank} ${{
     stock: 'taken from the stock',
@@ -648,6 +661,8 @@ function onWildPointerUp(ev) {
 
 function doDeal() {
   if (!game || !game.canDeal()) return false;
+  playSound('deal');
+  buzz(6);
   const before = new Set([...document.querySelectorAll('#board .card')].map((n) => n.dataset.id));
   if (!game.deal()) return false;
   const seals = game.state.lastSealed || [];
@@ -659,12 +674,18 @@ function doDeal() {
 function attempt(from, to, { animate = false } = {}) {
   const positions = animate ? snapshotPositions() : null;
   const ok = game.move(from, to);
-  if (ok) {
-    const seals = game.state.lastSealed || [];
-    if (seals.length) toast(seals.length > 1 ? `${seals.length} runes bound` : 'Rune bound');
-    afterAction(seals);
-    if (positions) flyFrom(positions);
+  if (!ok) { playSound('deny'); return false; }
+  const seals = game.state.lastSealed || [];
+  if (seals.length) {
+    playSound('seal');
+    buzz([12, 40, 18]);
+    toast(seals.length > 1 ? `${seals.length} runes bound` : 'Rune bound');
+  } else {
+    playSound('move');
+    buzz(8);
   }
+  afterAction(seals);
+  if (positions) flyFrom(positions);
   return ok;
 }
 
@@ -1069,6 +1090,101 @@ function supportRow() {
   return box;
 }
 
+/**
+ * The result as something pasteable. Copying is offered but the text is shown
+ * either way: a clipboard write can be refused, and a share you cannot read is
+ * no share at all.
+ */
+async function copyResult(text, node) {
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    ok = true;
+  } catch (_) {
+    // Blocked, or no clipboard at all: select it instead, so the player can
+    // copy it by hand rather than being told it failed.
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (__) { /* nothing more to try */ }
+  }
+  toast(ok ? 'Copied' : 'Select and copy');
+}
+
+function shareBlock(text) {
+  const box = el('div', 'share');
+  const pre = el('pre', 'share-text', text.replace(/</g, '&lt;'));
+  box.appendChild(pre);
+  const copy = el('button', '', 'Copy result');
+  copy.onclick = () => copyResult(text, pre);
+  box.appendChild(copy);
+  return box;
+}
+
+function recordsScreen() {
+  const runs = readRuns(webStore);
+  const sum = summarise(runs);
+  const daily = readDaily(webStore);
+
+  const p = el('div', 'panel');
+  // The record book is a list, and a list is what a phone held sideways has
+  // least room for: it loses the big sigil rather than the runs.
+  if (!isNarrow()) p.appendChild(el('div', 'mark-big', '❖'));
+  p.appendChild(el('h2', '', 'Records'));
+
+  if (!runs.length) {
+    p.appendChild(el('p', 'lead', 'Nothing yet. Finish a run and it lands here.'));
+  } else {
+    const tally = el('div', 'tally');
+    const stat = (n, k) => {
+      const d = el('div');
+      d.appendChild(el('div', 'n', String(n)));
+      d.appendChild(el('div', 'k', k));
+      return d;
+    };
+    tally.appendChild(stat(sum.played, 'Runs'));
+    tally.appendChild(stat(sum.won, 'Immortal'));
+    tally.appendChild(stat(sum.runes, 'Runes'));
+    tally.appendChild(stat(sum.best, 'Best'));
+    p.appendChild(tally);
+
+    const rows = Object.entries(DIFFICULTIES)
+      .filter(([key]) => sum.byDifficulty[key])
+      .map(([key, d]) => {
+        const r = sum.byDifficulty[key];
+        return `<tr><td>${d.name}</td><td>${r.played}</td>`
+          + `<td>${r.bestRank ? RANKS[r.bestRank - 1].name : '—'}</td><td>${r.bestScore}</td></tr>`;
+      }).join('');
+    p.insertAdjacentHTML('beforeend',
+      `<table class="records"><tr><th></th><th>Runs</th><th>Best rank</th><th>Best score</th></tr>${rows}</table>`);
+  }
+
+  if (daily.streak || daily.best) {
+    p.appendChild(el('p', '', `Daily streak <b style="color:var(--gold)">${daily.streak}</b>`
+      + ` · longest <b style="color:var(--gold)">${daily.best}</b>`));
+  }
+
+  const recent = runs.slice(0, isNarrow() ? 4 : 8).map((r) => `<tr><td>${r.daily ? dayLabel(r.daily) : r.day.slice(5)}`
+    + `${r.daily ? ' <span class="tag">daily</span>' : ''}</td>`
+    + `<td>${DIFFICULTIES[r.difficulty] ? DIFFICULTIES[r.difficulty].name : r.difficulty}</td>`
+    + `<td>${r.won ? 'Immortal' : r.rankName}</td><td>${r.score}</td></tr>`).join('');
+  if (recent) {
+    // The one list here that grows without bound gets to scroll rather than
+    // push the panel off a phone held sideways.
+    p.insertAdjacentHTML('beforeend',
+      `<h3>Recent</h3><div class="scroll-list"><table class="records">${recent}</table></div>`);
+  }
+
+  const back = el('button', 'big', 'Back');
+  back.style.marginTop = '12px';
+  back.onclick = titleScreen;
+  p.appendChild(back);
+  overlay(p);
+}
+
 function pauseScreen() {
   const p = el('div', 'panel');
   p.appendChild(el('div', 'mark-big', '❖'));
@@ -1091,10 +1207,28 @@ function pauseScreen() {
   quit.onclick = () => { titleScreen(); };
   row.append(resume, quit);
   p.appendChild(row);
+  const audio = el('button', soundOn() ? '' : 'quiet', soundOn() ? '🔊 Sound on' : '🔇 Sound off');
+  audio.style.marginTop = '12px';
+  audio.onclick = () => { setSoundOn(!soundOn()); playSound('move'); pauseScreen(); };
+  p.appendChild(el('div', '', '')).appendChild(audio);
   const shop = supportRow();
   if (shop) p.appendChild(shop);
   p.insertAdjacentHTML('beforeend', rulesHtml());
   overlay(p);
+}
+
+/** One line about the daily: the streak, or how today went if it is done. */
+function dailyLine() {
+  const daily = readDaily(webStore);
+  const today = daily.results[dayKey()];
+  const bits = [];
+  if (today) {
+    bits.push(`Today: <b style="color:var(--gold)">${today.won ? 'Immortal' : today.rankName}</b>`
+      + ` · ${today.runes} rune${today.runes === 1 ? '' : 's'}`);
+  }
+  if (daily.streak) bits.push(`streak <b style="color:var(--gold)">${daily.streak}</b>`);
+  // Nothing to report on a first visit, and a line saying so is a line wasted.
+  return bits.length ? `<p class="fine">${bits.join(' · ')}</p>` : '';
 }
 
 function titleScreen() {
@@ -1116,7 +1250,12 @@ function titleScreen() {
         </select>
       </div>
     </div>
-    <button class="big" id="btn-begin">Start a run</button>
+    <div class="row-2">
+      <button class="big" id="btn-begin">Start a run</button>
+      <button id="btn-daily">${playedToday(webStore) ? "Today again" : "Today's board"}</button>
+      <button id="btn-records">Records</button>
+    </div>
+    ${dailyLine()}
     <div id="resume-wrap"></div>
     ${rulesHtml()}`;
   overlay(p);
@@ -1140,6 +1279,8 @@ function titleScreen() {
     const seed = $('#seed-input').value.trim() || randomSeed();
     start(seed, $('#diff-input').value);
   };
+  $('#btn-daily').onclick = startDaily;
+  $('#btn-records').onclick = recordsScreen;
   $('#seed-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btn-begin').click(); });
 }
 
@@ -1177,8 +1318,11 @@ function endScreen(won) {
   const s = game.state;
   const score = game.score();
   const best = Number(localStorage.getItem(BEST_KEY) || 0);
-  if (score > best) localStorage.setItem(BEST_KEY, String(score));
+  const beaten = score > best;
+  if (beaten) localStorage.setItem(BEST_KEY, String(score));
   localStorage.removeItem(SAVE_KEY);
+  const result = fileRun(won);
+  playSound(won ? 'seal' : 'over');
 
   const p = el('div', 'panel');
   p.appendChild(el('div', 'mark-big', won ? TRANSCENDENCE.mark : '✧'));
@@ -1206,7 +1350,13 @@ function endScreen(won) {
     p.appendChild(el('p', '', 'Boons held: '
       + held.map((u) => `${u.name} ×${u.count}`).join(' · ')));
   }
-  p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b> · ${DIFFICULTIES[game.difficulty].name}`));
+  if (beaten && score > 0) p.appendChild(el('p', 'fine', 'A personal best.'));
+  p.appendChild(el('p', '', dailyRun
+    ? `Daily <b style="color:var(--gold)">${dayLabel(dailyRun)}</b> · ${DIFFICULTIES[game.difficulty].name}`
+    : `Seed <b style="color:var(--gold)">${game.seed}</b> · ${DIFFICULTIES[game.difficulty].name}`));
+  const card = result ? shareText(result, RANKS.length) : null;
+  if (card && !isNarrow()) p.appendChild(shareBlock(card));
+  else if (card) p.appendChild(el('p', 'pips', card.split('\n')[1]));
 
   // The run is over, so a break is due if the count says so. It runs on the
   // way out, never over the tally the player is still reading.
@@ -1246,6 +1396,12 @@ function endScreen(won) {
   const row = el('div');
   row.style.marginTop = '10px';
   row.append(again, retry, menu);
+  if (card && isNarrow()) {
+    const copy = el('button', '', 'Copy');
+    copy.style.marginLeft = '10px';
+    copy.onclick = () => copyResult(card, p.querySelector('.pips'));
+    row.appendChild(copy);
+  }
   p.appendChild(row);
   overlay(p);
 }
@@ -1306,13 +1462,42 @@ function save() {
   } catch (_) { /* private browsing */ }
 }
 
-function start(seed, difficulty) {
+function start(seed, difficulty, { daily = null } = {}) {
   stopHint();
   shownPhase = 'play';
   wildArmed = false;
+  dailyRun = daily;
+  filed = false;
   game = new Game({ seed, difficulty });
   closeOverlay();
   render();
+}
+
+/** Everyone gets the same board today. Adept, so the results compare. */
+function startDaily() {
+  start(dailySeed(), 'adept', { daily: dayKey() });
+}
+
+/** What a finished run leaves behind. */
+function fileRun(won) {
+  if (filed) return null;
+  filed = true;
+  const s = game.state;
+  const result = {
+    day: dayKey(),
+    daily: dailyRun,
+    seed: game.seed,
+    difficulty: game.difficulty,
+    rank: s.rank,
+    rankName: RANKS[s.rank - 1].name,
+    runes: s.totalRunes,
+    moves: s.moves,
+    score: game.score(),
+    won,
+  };
+  addRun(webStore, result);
+  if (dailyRun) noteDaily(webStore, result, dailyRun);
+  return result;
 }
 
 function bindChrome() {
@@ -1326,7 +1511,7 @@ function bindChrome() {
       if (!(await playReward('undo'))) { toast('No undo earned'); return; }
       game.grantUndo();
     }
-    if (game.undo()) afterAction();
+    if (game.undo()) { playSound('lift'); afterAction(); }
   });
   $('#btn-menu').addEventListener('click', () => {
     stopHint();
@@ -1362,6 +1547,7 @@ function bindChrome() {
 }
 
 export function boot() {
+  soundSetup(webStore);
   bindChrome();
   titleScreen();
   // Handle for the console and for browser-driven tests.
@@ -1370,6 +1556,8 @@ export function boot() {
     start,
     render,
     checkPhase,
+    startDaily,
+    recordsScreen,
     ads: { ready: adsReady, isPremium: adsPremium, canReward, lossBreak },
     /**
      * Attach a host's ad and purchase bridge, then redraw what it unlocks.

@@ -586,3 +586,36 @@ button.quiet { opacity: .75; }
 .support { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(232, 189, 106, .18); }
 .support .fine, p.fine { margin: 8px 0 0; font-size: 12px; opacity: .68; letter-spacing: .04em; }
 .cell.drop-ok { border-color: var(--gold); box-shadow: 0 0 14px rgba(232, 189, 106, .35); }
+
+/* ------------------------------------------------------- daily & records */
+.row-2 { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+.share {
+  margin: 14px auto 4px; padding: 10px 14px; max-width: 320px;
+}
+.share.tight {
+  display: flex; align-items: center; gap: 10px; justify-content: center;
+  margin: 8px auto 2px; padding: 6px 10px;
+  border: 1px solid rgba(232, 189, 106, .25); border-radius: 8px;
+  background: rgba(232, 189, 106, .05);
+}
+.share-text {
+  margin: 0 0 10px; font: inherit; font-size: 13px; line-height: 1.6;
+  white-space: pre-wrap; letter-spacing: .04em; color: var(--paper);
+  user-select: text; -webkit-user-select: text;
+}
+table.records {
+  margin: 10px auto 0; border-collapse: collapse; font-size: 12px;
+  letter-spacing: .05em; max-width: 340px; width: 100%;
+}
+table.records th {
+  font-weight: 400; text-transform: uppercase; font-size: 10px;
+  letter-spacing: .16em; opacity: .55; padding: 2px 8px; text-align: right;
+}
+table.records td { padding: 3px 8px; text-align: right; border-top: 1px solid rgba(255,255,255,.06); }
+table.records td:first-child, table.records th:first-child { text-align: left; }
+.tag {
+  font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--gold); opacity: .8;
+}
+.scroll-list { max-height: min(30vh, 220px); overflow-y: auto; }
+.panel h3 { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; opacity: .6; margin: 12px 0 0; font-weight: 400; }
