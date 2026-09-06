@@ -716,7 +716,7 @@ function hintStatusText() {
   if (!hint) return '';
   if (hint.kind === 'deal') return 'No moves left — deal another row';
   if (hint.kind === 'wild') return 'Only a wildcard left — drop one on a lit column';
-  if (hint.kind === 'over') return 'Nothing left to play — that is the run';
+  if (hint.kind === 'over') return 'Nothing left to play';
   const what = hint.kind === 'empty' ? 'Only empty-column moves'
     : hint.kind === 'park' ? 'Only a reserve slot left'
       : hint.kind === 'split' ? 'Only breaking a run leads anywhere'
@@ -980,36 +980,31 @@ function rulesHtml() {
     <div class="rules">
       <h3>The board</h3>
       <ul>
-        <li>Build <b>down by rank</b> onto any card — suit does not matter while stacking.</li>
-        <li>Cards that cannot be lifted yet are <b>dimmed</b>; free the run below them first.</li>
-        <li>Lift a group only when it is a <b>descending run of one suit</b>.</li>
-        <li><b>Tap or click a card</b> and it flies to whichever column builds the
-        longest sequence. Drag it instead when you want a different column.</li>
-        <li>An empty column accepts anything, and the stock deals one card to every column, empty ones included.</li>
+        <li>Build <b>down by rank</b>; suit does not matter.</li>
+        <li>Cards you cannot lift are <b>dimmed</b>.</li>
+        <li>Lift a group only if it is a <b>descending run</b>.</li>
+        <li><b>Tap a card</b> and it flies to wherever it builds the longest run. Drag it if you
+        want somewhere else.</li>
+        <li>An empty column takes anything. The stock deals to every column, empty ones included.</li>
       </ul>
       <h3>Ranking up</h3>
       <ul>
         <li>A complete <b>K→A run</b> is a <b>rune</b>. It binds itself and drops into the core.</li>
-        <li>A rank is a <b>whole board</b>: it ends when every card has gone into the core. Then you
-        <b>rank up</b>, pick a boon, and get a fresh board.</li>
-        <li>Every rank deals <b>one more sequence than the last</b>, and all of them have to go. That is
-        what the boons are for.</li>
-        <li>Three undos per rank. The run ends only when nothing is left that leads anywhere —
-        including breaking a run apart, a reserve slot and a wildcard in hand. If a line exists,
-        the hint will find it.</li>
+        <li>A rank ends when the <b>whole board</b> is gone. Then you <b>rank up</b>, pick a boon,
+        and start fresh.</li>
+        <li>Every rank deals <b>one more sequence than the last</b>. That is what the boons are for.</li>
+        <li>Three undos per rank. The run ends only when nothing leads anywhere — splits, reserve
+        slots and wildcards included. If a line exists, the hint finds it.</li>
       </ul>
       <h3>Boons &amp; keys</h3>
       <ul>
-        <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on any column and it becomes the
-        card that belongs there — one below whatever it lands on, or a King in an empty column.
-        Nothing goes below an Ace, so no wildcard lands on one.</li>
-        <li>It then finds a copy of the card it is mimicking and <b>deletes it</b>, so the board
-        stays exactly clearable.</li>
-        <li>A <b>reserve slot</b> holds one card off the board. Drag a card in; tap it to send it back.</li>
+        <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on a column and it becomes the card
+        that belongs there — one below what it lands on, or a King in an empty column. Nothing
+        goes below an Ace.</li>
+        <li>It then <b>deletes</b> a copy of whatever it mimics, so the board stays clearable.</li>
+        <li>A <b>reserve slot</b> holds one card off the board. Tap it to send it back.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
-        <li>Stuck? <b>Hint</b> walks every move the position offers, one a
-        second, showing where each one lands — best first. Anything you do
-        stops it.</li>
+        <li>Stuck? <b>Hint</b> walks every move, best first. Anything you do stops it.</li>
       </ul>
     </div>
   </details>`;
@@ -1023,7 +1018,7 @@ function supportRow() {
   if (!adsReady()) return null;
   const box = el('div', 'support');
   if (adsPremium()) {
-    box.appendChild(el('p', 'fine', 'Ad-free — thanks for the support.'));
+    box.appendChild(el('p', 'fine', 'Ad-free — thanks.'));
     return box;
   }
   const buy = el('button', '', 'Remove ads');
@@ -1031,7 +1026,7 @@ function supportRow() {
     buy.disabled = true;
     const ok = await buyPremium();
     buy.disabled = false;
-    toast(ok ? 'Ad-free. Thank you' : 'Purchase not completed');
+    toast(ok ? 'Ad-free — thanks' : 'Purchase not completed');
     if (ok) pauseScreen();
   };
   const restore = el('button', 'quiet', 'Restore');
@@ -1042,7 +1037,7 @@ function supportRow() {
     if (ok) pauseScreen();
   };
   box.append(buy, restore);
-  box.appendChild(el('p', 'fine', 'One payment, no more breaks between runs. Rewards are still yours to take.'));
+  box.appendChild(el('p', 'fine', 'One payment, no more breaks between runs.'));
   return box;
 }
 
@@ -1055,7 +1050,7 @@ function pauseScreen() {
     + ` · ${DIFFICULTIES[game.difficulty].name} · build ${buildTag()}`));
   const held = boonSummary(game.state.boons);
   if (!held.length) {
-    p.appendChild(el('p', '', 'No boons yet — clear a board to earn one.'));
+    p.appendChild(el('p', '', 'None yet — clear a board to earn one.'));
   } else {
     p.appendChild(el('p', '', 'Boons held: ' + held
       .map((u) => `<b style="color:var(--gold)">${u.sigil} ${u.name} ×${u.count}</b>`).join(' · ')));
@@ -1080,9 +1075,8 @@ function titleScreen() {
   p.innerHTML = `
     <div class="mark-big">✧</div>
     <h1>ASCENDANT</h1>
-    <p class="lead">Spider solitaire, run by run. Clear the whole board to rank up — then the
-    next rank deals one more sequence than the last, and you have to clear that too. Boons are
-    how you keep up.</p>
+    <p class="lead">Spider solitaire, run by run. Clear the board to rank up — and each rank
+    deals one more sequence than the last. Boons are how you keep up.</p>
     ${best ? `<p>Best run so far: <b style="color:var(--gold)">${best}</b></p>` : ''}
     <div class="setup">
       <div class="field"><label>Seed</label><input id="seed-input" placeholder="random" /></div>
@@ -1128,9 +1122,9 @@ function breakthroughScreen() {
   p.appendChild(el('div', 'mark-big', RANKS[s.rank - 1].mark));
   p.appendChild(el('h1', '', 'RANK UP'));
   p.appendChild(el('p', 'lead',
-    `${RANKS[s.rank - 1].name} done. Next is <b style="color:var(--gold)">${next.name}</b>: `
-    + `<b style="color:var(--gold)">${game.rankConfig(s.rank + 1).required} sequences</b>, and all of them have to go.`));
-  p.appendChild(el('p', '', 'Pick one. You keep it for the rest of the run.'));
+    `${RANKS[s.rank - 1].name} done. <b style="color:var(--gold)">${next.name}</b> next: `
+    + `<b style="color:var(--gold)">${game.rankConfig(s.rank + 1).required} sequences</b>.`));
+  p.appendChild(el('p', '', 'Pick one, for the rest of the run.'));
   const offer = el('div', 'offer');
   s.offer.forEach((boon, i) => {
     const b = el('div', 'boon');
@@ -1162,7 +1156,7 @@ function endScreen(won) {
   p.appendChild(el('div', 'mark-big', won ? TRANSCENDENCE.mark : '✧'));
   p.appendChild(el('h1', '', won ? 'IMMORTALITY' : 'RUN OVER'));
   p.appendChild(el('p', 'lead', won
-    ? 'All six ranks, every rune. Turns out you were meant for it.'
+    ? 'All six ranks. Turns out you were meant for it.'
     : `You made it to <b style="color:var(--gold)">${RANKS[s.rank - 1].name}</b>. `
       + "That's decent — but not everyone's meant for immortality."));
 
@@ -1204,7 +1198,7 @@ function endScreen(won) {
       closeOverlay();
       render();
       save();
-      toast('A wildcard, and one more undo');
+      toast('A wildcard and an undo');
     };
     const windRow = el('div');
     windRow.style.margin = '14px 0 2px';

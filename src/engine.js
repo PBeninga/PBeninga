@@ -397,9 +397,9 @@ export class Game {
     this.log({
       stock: `Wildcard becomes ${label} — one taken out of the stock.`,
       hidden: `Wildcard becomes ${label} — a face-down one goes.`,
-      faceup: `Wildcard becomes ${label} — the other one comes off the board.`,
+      faceup: `Wildcard becomes ${label} — one comes off the board.`,
       reserve: `Wildcard becomes ${label} — taken out of the reserve.`,
-      free: `Wildcard becomes ${label} — nothing left to take, so it is free.`,
+      free: `Wildcard becomes ${label} — none left to take, so free.`,
     }[plan.cost]);
     this.settle();
     return { cost: plan.cost, removed, value: plan.value };
@@ -441,17 +441,17 @@ export class Game {
     if (s.runes >= s.required) {
       if (s.rank >= RANKS.length) {
         s.phase = 'ascended';
-        this.log('That is the last of it. Immortality suits you.');
+        this.log('Immortality suits you.');
       } else {
         s.phase = 'breakthrough';
         s.offer = offerBoons(s.boons);
-        this.log(`${RANKS[s.rank - 1].name} cleared. Rank up.`);
+        this.log(`${RANKS[s.rank - 1].name} cleared.`);
       }
       return;
     }
     if (!this.hasLegalMove()) {
       s.phase = 'failed';
-      this.log('Nothing left to play. That is the run.');
+      this.log('Nothing left to play.');
     }
   }
 
@@ -497,7 +497,7 @@ export class Game {
     s.wilds++;
     s.undosLeft++;
     this.undoStack = [];
-    this.log('Second wind: a wildcard, and one more undo.');
+    this.log('Second wind: a wildcard and an undo.');
     return true;
   }
 

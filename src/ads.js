@@ -20,7 +20,7 @@ export const LOSSES_PER_BREAK = 3;
 export const BREAK_COOLDOWN_MS = 90_000;
 
 export const REWARDS = {
-  reprieve: { key: 'reprieve', label: 'Second wind', blurb: 'A wildcard and an undo — keep going.' },
+  reprieve: { key: 'reprieve', label: 'Second wind', blurb: 'A wildcard and an undo.' },
   undo: { key: 'undo', label: 'One more undo', blurb: 'Take back one more move this rank.' },
 };
 
