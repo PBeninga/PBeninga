@@ -685,8 +685,11 @@ function nudge(node) {
 function hintStatusText() {
   if (!hint) return '';
   if (hint.kind === 'deal') return 'No moves left — deal another row';
+  if (hint.kind === 'wild') return 'Only a wildcard left — drop one on a lit column';
   if (hint.kind === 'over') return 'No moves and nothing to deal — the run is over';
-  const what = hint.kind === 'empty' ? 'Only empty-column moves' : 'Showing hint';
+  const what = hint.kind === 'empty' ? 'Only empty-column moves'
+    : hint.kind === 'park' ? 'Only a reserve slot left'
+      : 'Showing hint';
   return `${what} ${hint.index + 1}/${hint.moves.length}`;
 }
 
@@ -697,6 +700,14 @@ function startHint() {
   hint = { kind: s.kind, moves: s.moves, index: 0, timers: [], layer: null };
   renderTop();
   renderDock();
+  if (hint.kind === 'wild') {
+    // No card to fly: the advice is the deck itself and the columns it can go
+    // on, which is exactly what arming a wildcard already shows.
+    $('#wilds').classList.add('hint-deal');
+    markWildTargets(true);
+    hint.timers.push(setTimeout(() => { stopHint(); render(); }, 2600));
+    return;
+  }
   if (!hint.moves.length) {
     // Nothing to draw a ghost for: the advice is the stock pile, or nothing.
     hint.timers.push(setTimeout(() => { stopHint(); render(); }, 2600));
@@ -706,6 +717,8 @@ function startHint() {
 }
 
 function stopHint() {
+  $('#wilds').classList.remove('hint-deal');
+  if (!wildArmed) markWildTargets(false);
   if (!hint) return;
   for (const t of hint.timers) clearTimeout(t);
   if (hint.layer) hint.layer.remove();
@@ -739,14 +752,16 @@ function showHintStep() {
     ? document.querySelector(`.cell[data-cell="${move.from.index}"]`)
     : document.querySelector(
       `.card[data-col="${move.from.index}"][data-idx="${game.state.columns[move.from.index].length - move.from.count}"]`);
-  const destCol = document.querySelector(`.col[data-col="${move.to.index}"]`);
-  if (!src || !destCol || !board) return;
+  const destEl = move.to.zone === 'reserve'
+    ? document.querySelector(`.cell[data-cell="${move.to.index}"]`)
+    : document.querySelector(`.col[data-col="${move.to.index}"]`);
+  if (!src || !destEl || !board) return;
 
   const from = src.getBoundingClientRect();
-  const to = destCol.getBoundingClientRect();
+  const to = destEl.getBoundingClientRect();
   const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-h'));
   const gap = h * (document.body.classList.contains('compact-cards') ? 0.36 : 0.30);
-  const landing = to.top + landingTop(move.to.index);
+  const landing = move.to.zone === 'reserve' ? to.top : to.top + landingTop(move.to.index);
 
   const layer = el('div', 'hint-layer');
   const nodes = run.map((card, i) => {
@@ -949,7 +964,8 @@ function rulesHtml() {
         <b>advance</b>, choose a boon, and face a fresh board.</li>
         <li>Every rank deals <b>one more sequence than the last</b>, and all of them must go. The boons you
         take are what close that gap.</li>
-        <li>Three undos per rank. If the board locks up and the stock is spent, the climb ends.</li>
+        <li>Three undos per rank. The climb ends only when nothing is left to do — no move, no
+        row to deal, no reserve slot worth using and no wildcard in hand.</li>
       </ul>
       <h3>Boons &amp; Keys</h3>
       <ul>

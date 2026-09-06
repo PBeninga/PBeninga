@@ -535,6 +535,86 @@ for (const view of VIEWS) {
     await unstash(page);
   });
 
+  await check('with only a wildcard left the hint says so and lights the columns', async () => {
+    await hintOff(page);
+    await stash(page);
+    const kind = await page.evaluate(() => {
+      const g = window.Ascendant.game;
+      // Two cards that do nothing for each other, no stock, one wildcard.
+      g.state.columns = g.state.columns.map(() => []);
+      g.state.columns[0] = [{ id: 9500, rank: 3, suit: 'spade', faceUp: true, wild: false }];
+      g.state.columns[1] = [{ id: 9501, rank: 8, suit: 'spade', faceUp: true, wild: false }];
+      g.state.stock = [];
+      g.state.reserve = [];
+      g.state.wilds = 1;
+      window.Ascendant.render();
+      return g.suggest().kind;
+    });
+    if (kind !== 'wild') { await unstash(page); throw new Error('expected wildcard advice, got ' + kind); }
+
+    await page.click('#btn-hint');
+    await page.waitForTimeout(250);
+    const shown = await page.evaluate(() => ({
+      text: document.querySelector('#status').textContent,
+      lit: document.querySelectorAll('.col.wild-ok').length,
+      deck: document.querySelector('#wilds').classList.contains('hint-deal'),
+    }));
+    if (!/wildcard/i.test(shown.text)) throw new Error('the dock did not name the wildcard');
+    if (!shown.lit) throw new Error('no columns were lit as targets');
+    if (!shown.deck) throw new Error('the deck itself was not pointed at');
+    await hintOff(page);
+    const cleared = await page.evaluate(() => document.querySelectorAll('.col.wild-ok').length
+      + (document.querySelector('#wilds').classList.contains('hint-deal') ? 1 : 0));
+    if (cleared) throw new Error('the hint left its marks behind');
+    await unstash(page);
+  });
+
+  await check('a reserve slot that would free the board is offered before giving up', async () => {
+    await hintOff(page);
+    await stash(page);
+    try {
+      const kind = await page.evaluate(() => {
+        const g = window.Ascendant.game;
+        // Nothing to play, but lifting the 9 lets the 5 go onto the 6. Every
+        // other column is a pair of Kings: nothing moves, and nothing is empty,
+        // so the reserve slot is the only thing left to try.
+        let id = 9600;
+        g.state.columns = g.state.columns.map(() => ([
+          { id: id++, rank: 13, suit: 'spade', faceUp: true, wild: false },
+          { id: id++, rank: 13, suit: 'spade', faceUp: true, wild: false },
+        ]));
+        g.state.columns[0] = [
+          { id: id++, rank: 5, suit: 'spade', faceUp: true, wild: false },
+          { id: id++, rank: 9, suit: 'spade', faceUp: true, wild: false },
+        ];
+        g.state.columns[1] = [
+          { id: id++, rank: 2, suit: 'spade', faceUp: true, wild: false },
+          { id: id++, rank: 6, suit: 'spade', faceUp: true, wild: false },
+        ];
+        g.state.stock = [];
+        g.state.wilds = 0;
+        g.state.reserve = [null];
+        window.Ascendant.render();
+        return { kind: g.suggest().kind, stagnant: g.isStagnant(), phase: g.state.phase };
+      });
+      if (kind.kind !== 'park') throw new Error('expected reserve advice, got ' + kind.kind);
+      if (kind.stagnant) throw new Error('the board was called dead while a slot could free it');
+      if (kind.phase !== 'play') throw new Error('the run ended on a board with a way out');
+
+      await page.click('#btn-hint');
+      await page.waitForTimeout(300);
+      const ghosts = await page.evaluate(() => ({
+        cards: document.querySelectorAll('.hint-layer .card').length,
+        text: document.querySelector('#status').textContent,
+      }));
+      if (ghosts.cards !== 1) throw new Error(`the ghost showed ${ghosts.cards} cards, not the one to park`);
+      if (!/reserve/i.test(ghosts.text)) throw new Error('the dock did not name the reserve slot');
+    } finally {
+      await hintOff(page);
+      await unstash(page);
+    }
+  });
+
   await check('any action cancels the hint', async () => {
     if (!(await page.evaluate(() => !!document.querySelector('.hint-layer')))) {
       await page.click('#btn-hint');

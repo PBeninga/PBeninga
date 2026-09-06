@@ -116,9 +116,17 @@ It only offers moves that are actually worth something, in this order:
 4. failing that, **deal another row** — the stock pulses instead of a card flying
 5. failing that, an empty column after all, or **the run is over**
 
-That last rung is also the game-over test: a rank ends when every card is
-bound, or when the chain runs out. A reserve slot that would uncover something
-still counts as a way out, so it never ends a run by surprise.
+The chain does not stop at the board. When nothing on it works, the last two
+rungs are what you hold: a **reserve slot**, if parking a card would turn
+something over or open a move that is not there now, and then a **wildcard**,
+which is offered last because it is the only one that costs something
+permanent.
+
+That whole chain is also the game-over test — `hasLegalMove` is exactly
+"the hint has something to say". A run can never end on a move the hint would
+have shown, and the hint can never point at a run the game has already ended.
+Parking a card that only comes straight back is not a way out, and does not
+keep a dead run alive.
 
 `Space` deals · `U` or `Ctrl/⌘+Z` undoes · `H` toggles hints · `Esc` stops them.
 

@@ -456,16 +456,12 @@ export class Game {
   }
 
   /**
-   * The run continues while there is something worth doing: a suggestion, or a
-   * cell to park a card in -- and a cell only counts when parking would uncover
-   * a face-down card or empty a column, since shuffling one card in and out
-   * forever is not a way out.
+   * The run continues while there is anything worth doing. That is exactly the
+   * question `suggest` answers, held cards included, so it is the only place
+   * the answer lives -- a run can never end on a move the hint would have
+   * shown, and the hint can never point at a run the game has ended.
    */
   hasLegalMove() {
-    const s = this.state;
-    if (s.wilds > 0 && s.columns.some((_, i) => this.wildCost({ zone: 'col', index: i }))) return true;
-    if (s.reserve.some((r) => r === null)
-      && s.columns.some((c) => c.length === 1 || (c.length > 1 && !c[c.length - 2].faceUp))) return true;
     return this.suggest().kind !== 'over';
   }
 
@@ -681,7 +677,67 @@ export class Game {
     if (intoEmpty.length && buried) return { kind: 'empty', moves: intoEmpty };
     if (this.canDeal()) return { kind: 'deal', moves: [] };
     if (intoEmpty.length) return { kind: 'empty', moves: intoEmpty };
+
+    // What is held comes last, cheapest first. A reserve slot is lent, not
+    // spent -- the card comes back -- so it is tried before a wildcard, which
+    // takes a card out of the game for good.
+    const park = this.parkMoves();
+    if (park.length) return { kind: 'park', moves: park };
+    const wild = this.wildMoves();
+    if (wild.length) return { kind: 'wild', moves: wild };
     return { kind: 'over', moves: [] };
+  }
+
+  /**
+   * Cards worth parking in a free reserve slot. A slot is only a way out when
+   * lifting the card changes something: it uncovers a face-down card, empties
+   * a column, or exposes a card that gives the board a move it did not have.
+   * Shuffling one card in and out forever is not a way out, so those are not
+   * listed and do not keep a dead run alive.
+   */
+  parkMoves() {
+    const s = this.state;
+    if (s.phase !== 'play') return [];
+    const slot = s.reserve.indexOf(null);
+    if (slot < 0) return [];
+
+    const out = [];
+    for (let i = 0; i < s.columns.length; i++) {
+      const col = s.columns[i];
+      if (!col.length) continue;
+      const foot = col[col.length - 1];
+      if (!foot.faceUp) continue;
+      const move = { from: { zone: 'col', index: i, count: 1 }, to: { zone: 'reserve', index: slot } };
+
+      if (col.length > 1 && !col[col.length - 2].faceUp) { out.push(move); continue; }
+
+      // Nothing is turned over by lifting it -- emptying a column included,
+      // since an empty column is only worth what can be moved into it. So the
+      // question is whether the board opens up without the card. Try it and
+      // see, judging the result the way `suggest` judges any other position.
+      col.pop();
+      s.reserve[slot] = foot;
+      const after = this.listMoves();
+      const buried = s.columns.some((c) => c.some((x) => !x.faceUp));
+      const opens = after.some((m) => m.seals || (m.wholeRun && !m.destEmpty))
+        || (buried && after.some((m) => m.destEmpty));
+      s.reserve[slot] = null;
+      col.push(foot);
+      if (opens) out.push(move);
+    }
+    return out;
+  }
+
+  /** Columns a held wildcard could still be spent on. */
+  wildMoves() {
+    const s = this.state;
+    if (s.phase !== 'play' || s.wilds <= 0) return [];
+    const out = [];
+    for (let i = 0; i < s.columns.length; i++) {
+      const plan = this.wildCost({ zone: 'col', index: i });
+      if (plan) out.push({ to: { zone: 'col', index: i }, value: plan.value });
+    }
+    return out;
   }
 
   /** Every sequence a full run would have to bind, across all six ranks. */

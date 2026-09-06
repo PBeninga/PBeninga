@@ -171,10 +171,62 @@ test('a dead board with no stock and no moves ends the run', () => {
   assert.equal(g.isStagnant(), false); // already failed, no longer "play"
 });
 
-test('stagnation is reported while a board is still live', () => {
+test('an open reserve slot with nothing but a shuffle in it is still the end', () => {
+  // Parking either card empties a column the other card cannot use, and the
+  // parked card can only come back. That is not a way out, and a run that
+  // cannot end would leave the player staring at advice that never changes.
   const g = rigged([[up(3, 'spade')], [up(3, 'heart')]], { reserve: [null] });
+  assert.deepEqual(g.parkMoves(), [], 'nothing worth parking');
+  assert.equal(g.isStagnant(), true);
   g.settle();
-  assert.equal(g.state.phase, 'play', 'an open cell keeps the run alive');
+  assert.equal(g.state.phase, 'failed', 'and the run is allowed to end');
+});
+
+test('a reserve slot that uncovers a card keeps the run alive, and is advised', () => {
+  const g = rigged([
+    [makeCard(4, 'spade', false), up(9, 'spade')],
+    [up(2, 'spade'), up(7, 'spade')],
+  ], { reserve: [null] });
+  g.settle();
+  assert.equal(g.state.phase, 'play');
+  const s = g.suggest();
+  assert.equal(s.kind, 'park', 'the hint points at the slot rather than giving up');
+  assert.deepEqual(s.moves[0].from, { zone: 'col', index: 0, count: 1 });
+  assert.deepEqual(s.moves[0].to, { zone: 'reserve', index: 0 });
+});
+
+test('a reserve slot that opens a move keeps the run alive with nothing face down', () => {
+  // Nothing is buried: the 9 simply sits on a 5 that the 6 would take.
+  const g = rigged([
+    [up(5, 'spade'), up(9, 'spade')],
+    [up(2, 'spade'), up(6, 'spade')],
+  ], { reserve: [null] });
+  g.settle();
+  assert.equal(g.state.phase, 'play', 'the board is not dead, it is blocked');
+  const s = g.suggest();
+  assert.equal(s.kind, 'park');
+  assert.equal(s.moves[0].from.index, 0, 'lift the 9 and the 5 has somewhere to go');
+});
+
+test('a held wildcard is a move, and the last one offered before the end', () => {
+  const g = rigged([[up(3, 'spade')], [up(3, 'heart')]], { wilds: 1 });
+  g.settle();
+  assert.equal(g.state.phase, 'play', 'a wildcard in hand is a way out');
+  const s = g.suggest();
+  assert.equal(s.kind, 'wild');
+  assert.ok(s.moves.length, 'and it names the columns it can go on');
+
+  g.state.wilds = 0;
+  assert.equal(g.suggest().kind, 'over', 'without one, the same board is over');
+});
+
+test('the run ends only on a board the hint has nothing to say about', () => {
+  const g = rigged([[up(3, 'spade')], [up(3, 'heart')]], { reserve: [null], wilds: 2 });
+  g.settle();
+  assert.equal(g.hasLegalMove(), true);
+  assert.equal(g.isStagnant(), false, 'alive and advised are the same question');
+  g.state.wilds = 0;
+  assert.equal(g.hasLegalMove(), false);
   assert.equal(g.isStagnant(), true);
 });
 
