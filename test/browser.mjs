@@ -386,6 +386,60 @@ for (const view of VIEWS) {
     await unstash(page);
   });
 
+  await check('a second finger cannot leave a card stuck on the screen', async () => {
+    await hintOff(page);
+    await stash(page);
+    try {
+      const out = await page.evaluate(async () => {
+        const g = window.Ascendant.game;
+        const foot = (i) => document.querySelector(`.card[data-col="${i}"][data-idx="${g.state.columns[i].length - 1}"]`);
+        let a = null, b = null;
+        for (let i = 0; i < g.state.columns.length; i++) {
+          if (!g.state.columns[i].length) continue;
+          const n = foot(i);
+          if (!n) continue;
+          if (!a) a = n; else if (!b) b = n;
+        }
+        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+        const opt = (id, x, y) => ({ pointerType: 'touch', pointerId: id, isPrimary: id === 1,
+          clientX: x, clientY: y, bubbles: true, cancelable: true });
+        const ax = ra.x + ra.width / 2, ay = ra.y + ra.height / 2;
+
+        a.dispatchEvent(new PointerEvent('pointerdown', opt(1, ax, ay)));
+        for (let k = 1; k <= 6; k++) window.dispatchEvent(new PointerEvent('pointermove', opt(1, ax, ay + k * 12)));
+        await new Promise((r) => setTimeout(r, 40));
+        const lifted = document.querySelectorAll('.drag-layer').length;
+
+        // A thumb brushes another card mid-drag.
+        b.dispatchEvent(new PointerEvent('pointerdown', opt(2, rb.x + 5, rb.y + 5)));
+        for (let k = 1; k <= 6; k++) window.dispatchEvent(new PointerEvent('pointermove', opt(2, rb.x + 5, rb.y + 5 + k * 12)));
+        await new Promise((r) => setTimeout(r, 40));
+        const both = document.querySelectorAll('.drag-layer').length;
+
+        window.dispatchEvent(new PointerEvent('pointerup', opt(2, rb.x + 5, rb.y + 80)));
+        window.dispatchEvent(new PointerEvent('pointerup', opt(1, ax, ay + 80)));
+        await new Promise((r) => setTimeout(r, 350));
+        return { lifted, both, stuck: document.querySelectorAll('.drag-layer .card').length };
+      });
+      if (out.lifted !== 1) throw new Error('the first drag never lifted');
+      if (out.both !== 1) throw new Error('a second finger started a second drag');
+      if (out.stuck) throw new Error(`${out.stuck} card(s) left floating over the board`);
+
+      // And whatever route one arrives by, a redraw takes it down.
+      const swept = await page.evaluate(() => {
+        const layer = document.createElement('div');
+        layer.className = 'drag-layer';
+        layer.appendChild(document.createElement('div')).className = 'card';
+        document.body.appendChild(layer);
+        window.Ascendant.render();
+        return document.querySelectorAll('.drag-layer').length;
+      });
+      if (swept) throw new Error('a stray layer survived a redraw');
+    } finally {
+      await unstash(page);
+    }
+  });
+
   await check('a card drags into a reserve slot, aimed either way', async () => {
     await hintOff(page);
     await stash(page);

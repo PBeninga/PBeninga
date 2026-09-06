@@ -144,6 +144,9 @@ function offsetsFor(columns, h, boardH, compact) {
 
 function render() {
   if (!game) return;
+  // Nothing should be floating over a board that is being drawn fresh. Whatever
+  // route a stray layer arrived by, it goes here.
+  if (!(drag && drag.active) && !(wildDrag && wildDrag.active)) clearDragLayers();
   renderTop();
   renderBoard();
   renderDock();
@@ -588,6 +591,8 @@ function spendWild(index) {
 
 function onWildPointerDown(ev) {
   if (!game || game.state.phase !== 'play' || game.state.wilds <= 0) return;
+  if (ev.isPrimary === false) return;
+  endStrayDrag();
   stopHint();
   wildDrag = { startX: ev.clientX, startY: ev.clientY, active: false, touch: ev.pointerType === 'touch' };
   window.addEventListener('pointermove', onWildPointerMove);
@@ -841,6 +846,9 @@ function cardRef(node) {
 
 function onPointerDown(ev) {
   if (!game || game.state.phase !== 'play') return;
+  // A second finger is not a second drag.
+  if (ev.isPrimary === false) return;
+  endStrayDrag();
   if (wildArmed) {
     const target = ev.target.closest('.col');
     if (target) { spendWild(Number(target.dataset.col)); return; }
@@ -912,6 +920,26 @@ function positionDrag(ev) {
   [...drag.layer.children].forEach((n, i) => {
     n.style.top = ev.clientY - drag.dy + i * drag.stackGap + 'px';
   });
+}
+
+/**
+ * Drop any drag still standing and take its cards off the screen.
+ *
+ * There is one drag at a time, but nothing used to enforce it: a second finger
+ * landing on a card overwrote the drag in flight, and the layer holding the
+ * first one's cards was left in the document with no reference to it. Being
+ * pointer-events: none, it could not even be dismissed by touching it -- a
+ * card frozen over the board for the rest of the run.
+ */
+function endStrayDrag() {
+  if (drag) { window.removeEventListener('pointermove', onPointerMove); drag = null; }
+  if (wildDrag) { window.removeEventListener('pointermove', onWildPointerMove); wildDrag = null; }
+  clearDragLayers();
+}
+
+/** Take down every floating card layer. Only one can be wanted at a time. */
+function clearDragLayers() {
+  document.querySelectorAll('.drag-layer').forEach((n) => n.remove());
 }
 
 function onPointerCancel() {
