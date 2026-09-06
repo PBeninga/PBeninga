@@ -632,7 +632,7 @@ test('with the stock spent, an empty column is the last resort', () => {
   assert.equal(g.hasLegalMove(), true);
 });
 
-test('each Wildstone boon puts two wildcards in hand, refreshed each rank', () => {
+test('each Wildcard boon puts two wildcards in hand, refreshed each rank', () => {
   const g = new Game({ seed: 'HAND', difficulty: 'adept' });
   assert.equal(g.state.wilds, 0);
   g.state.boons = { talisman: 3 };
@@ -734,11 +734,11 @@ test('a conjured wildcard is counted so the save still checks out', () => {
   assert.equal(back.state.conjured, 1);
 });
 
-test('a wildcard will pay out of the vault when the board has nothing left', () => {
+test('a wildcard will pay out of the reserve when the board has nothing left', () => {
   const g = rigged([[up(9, 'spade'), up(4, 'spade')]], { wilds: 1 });
   g.state.reserve = [makeCard(3, 'spade', true)];
   const r = g.placeWild({ zone: 'col', index: 0 });
-  assert.equal(r.cost, 'vault');
+  assert.equal(r.cost, 'reserve');
   assert.equal(g.state.reserve[0], null);
   assert.equal(g.state.columns[0][2].rank, 3);
 });

@@ -63,9 +63,9 @@ Standard Spider, with two additions.
   every rune you seal would otherwise strand the stock.
 - A **K→A run** at the foot of a column binds itself as a rune and goes into
   the core.
-- **Wildstones** (✦) are wild: they adopt whatever rank and suit the run needs
-  at their position, including inside a bound rune.
-- **Vault slots** hold one card each, off the board.
+- **Wildcards** (✦) are held in hand. Drop one on a column and it becomes the
+  card that belongs there, deleting a copy of whatever it mimics.
+- **Reserve slots** hold one card each, off the board.
 
 ## Playing
 
@@ -117,7 +117,7 @@ It only offers moves that are actually worth something, in this order:
 5. failing that, an empty column after all, or **the run is over**
 
 That last rung is also the game-over test: a rank ends when every card is
-bound, or when the chain runs out. A vault slot that would uncover something
+bound, or when the chain runs out. A reserve slot that would uncover something
 still counts as a way out, so it never ends a run by surprise.
 
 `Space` deals · `U` or `Ctrl/⌘+Z` undoes · `H` toggles hints · `Esc` stops them.
@@ -134,16 +134,16 @@ run ever asks is how to split five picks between them.
 
 | | | |
 |---|---|---|
-| ✦ **Wildstone** | +2 wildcards in hand each rank | Drop one on any column; it fixes to one below what it lands on, and takes a card out of the game |
-| ❖ **Vault Slot** | +1 vault slot | Holds a single card off the board, for as long as you need it out of the way |
+| ✦ **Wildcard** | +2 wildcards in hand each rank | Drop one on any column and it becomes the card that belongs there, deleting a copy of whatever it mimics |
+| ❖ **Reserve Slot** | +1 reserve slot | Holds a single card off the board, for as long as you need it out of the way |
 
-They solve different problems. Wildstones fix the board you were dealt — a gap
+They solve different problems. Wildcards fix the board you were dealt — a gap
 in a sequence stops mattering. Slots fix the board you have made — somewhere to
-put the card that is in the way. Wildstones compound (each deal carries them
-all); slots are a standing allowance you spend and reclaim.
+put the card that is in the way.
 
-Wildstones are dealt face down like any other card, so buying them is a bet on
-finding them.
+Deleting a copy of what it mimics is what keeps the deal clearable: every rank
+holds exactly as many cards as there are runes left to bind, and a wildcard
+moves one of them rather than adding one.
 
 ## Layout
 

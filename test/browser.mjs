@@ -723,7 +723,7 @@ for (const view of VIEWS) {
     await page.click('#btn-paths');
     await page.waitForTimeout(250);
     const text = await page.evaluate(() => document.querySelector('#overlay .panel').textContent);
-    if (!/Wildstone ×2/.test(text) || !/Vault Slot ×1/.test(text)) {
+    if (!/Wildcard ×2/.test(text) || !/Reserve Slot ×1/.test(text)) {
       throw new Error('the panel did not name the boons held: ' + JSON.stringify(text.slice(0, 200)));
     }
     await page.evaluate(() => document.querySelector('#overlay .big').click());

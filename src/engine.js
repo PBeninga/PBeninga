@@ -308,7 +308,7 @@ export class Game {
    * Order of preference: the undealt stock first -- taking the card furthest
    * from the top, so the shortfall lands in the last row dealt -- then a
    * face-down card out of the deepest dig, then the face-up copy with the
-   * least stacked on it, then the vault.
+   * least stacked on it, then the reserve.
    */
   wildPayment(rank) {
     const s = this.state;
@@ -346,7 +346,7 @@ export class Game {
     if (open) return open;
 
     const slot = s.reserve.findIndex((c) => c && c.rank === rank);
-    return slot >= 0 ? { cost: 'vault', slot } : null;
+    return slot >= 0 ? { cost: 'reserve', slot } : null;
   }
 
   /** What placing a wildcard on `to` would cost, or null if it cannot be paid. */
@@ -376,7 +376,7 @@ export class Game {
    * wildcard is simply conjured, since a board short of a rank was already
    * one rune short of finishing.
    *
-   * @returns {false|{cost:'stock'|'hidden'|'faceup'|'vault'|'free', removed:?object, value:object}}
+   * @returns {false|{cost:'stock'|'hidden'|'faceup'|'reserve'|'free', removed:?object, value:object}}
    */
   placeWild(to) {
     const s = this.state;
@@ -387,7 +387,7 @@ export class Game {
     let removed = null;
     if (plan.cost === 'free') s.conjured++;
     else if (plan.cost === 'stock') removed = s.stock.splice(plan.index, 1)[0];
-    else if (plan.cost === 'vault') { removed = s.reserve[plan.slot]; s.reserve[plan.slot] = null; }
+    else if (plan.cost === 'reserve') { removed = s.reserve[plan.slot]; s.reserve[plan.slot] = null; }
     else removed = s.columns[plan.column].splice(plan.index, 1)[0];
 
     s.columns[to.index].push(makeWild(true, plan.value.rank, plan.value.suit));
@@ -398,7 +398,7 @@ export class Game {
       stock: `A wildcard settles as ${label}, taking one out of the undealt stock.`,
       hidden: `A wildcard settles as ${label}, burning a face-down one away.`,
       faceup: `A wildcard settles as ${label}, swallowing the last one on the board.`,
-      vault: `A wildcard settles as ${label}, drawn out of the vault.`,
+      reserve: `A wildcard settles as ${label}, drawn out of the reserve.`,
       free: `A wildcard settles as ${label}. Nothing was left to pay with, so it comes free.`,
     }[plan.cost]);
     this.settle();

@@ -41,7 +41,7 @@ export function cardLabel(card) {
 
 /**
  * Build a deck of `sets` full A-K runs spread round-robin over the first
- * `suitCount` suits, plus `wilds` wildstones, shuffled.
+ * `suitCount` suits, plus `wilds` wildcards, shuffled.
  */
 export function buildDeck({ sets, suitCount, wilds = 0 }, rng) {
   const suits = SUITS.slice(0, Math.max(1, Math.min(SUITS.length, suitCount)));

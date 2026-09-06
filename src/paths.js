@@ -1,23 +1,22 @@
 // The boons offered on advancement. Both are repeatable, so every advancement
-// is the same question asked again: more wildstones, or more room?
+// is the same question asked again: more wildcards, or more room?
 
 export const UPGRADES = [
   {
     key: 'talisman',
-    name: 'Wildstone',
+    name: 'Wildcard',
     sigil: '✦',
     each: '+2 wildcards in hand',
-    desc: 'Two more each rank. Drop one anywhere; it fixes to one below what '
-      + 'it lands on and eats a copy of that same rank — stock first, then '
-      + 'a buried one, then one on the board. Never the card it sits on.',
+    desc: 'Two more each rank. Drop one anywhere and it becomes the card that '
+      + 'belongs there, deleting a copy of whatever it mimics.',
   },
   {
     key: 'cell',
-    name: 'Vault Slot',
+    name: 'Reserve Slot',
     sigil: '❖',
-    each: '+1 vault slot',
-    desc: 'One more slot in the vault. A slot holds a single card off the '
-      + 'board, for as long as you need it out of the way.',
+    each: '+1 reserve slot',
+    desc: 'One more slot. Each holds a single card off the board, for as long '
+      + 'as you need it out of the way.',
   },
 ];
 
@@ -31,7 +30,7 @@ export function offerBoons(boons) {
   });
 }
 
-/** "✦ Wildstone ×2" for each boon held, in a stable order. */
+/** "✦ Wildcard ×2" for each boon held, in a stable order. */
 export function boonSummary(boons) {
   return UPGRADES
     .filter((u) => boons[u.key])
