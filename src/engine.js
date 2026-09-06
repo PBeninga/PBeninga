@@ -669,6 +669,12 @@ export class Game {
     const useful = all.filter((m) => m.seals || (m.wholeRun && !m.destEmpty));
     if (useful.length) return { kind: 'moves', moves: useful };
 
+    // Parking is not in listMoves -- it lands nowhere a run can build -- so a
+    // park that turns a card over is asked about here, before a fresh row
+    // buries anything else.
+    const exposing = this.allMoves().filter((m) => m.to.zone === 'reserve' && Game.gains(m));
+    if (exposing.length) return { kind: 'park', moves: exposing };
+
     const intoEmpty = all.filter((m) => m.destEmpty);
     // Filling an empty column is only ever a way to get at something buried.
     // With nothing face down left it uncovers nothing, so a fresh row is worth
@@ -678,54 +684,180 @@ export class Game {
     if (this.canDeal()) return { kind: 'deal', moves: [] };
     if (intoEmpty.length) return { kind: 'empty', moves: intoEmpty };
 
-    // What is held comes last, cheapest first. A reserve slot is lent, not
-    // spent -- the card comes back -- so it is tried before a wildcard, which
-    // takes a card out of the game for good.
-    const park = this.parkMoves();
+    // Nothing on the board gains on its own. Before giving up, look for a
+    // rearrangement that leads to one -- a run has to come apart before the
+    // card under it can be used, and that is a real way to win.
+    const opening = this.openingMoves();
+    const split = opening.moves.filter((m) => m.to.zone !== 'reserve');
+    if (split.length) return { kind: 'split', moves: split };
+    // A slot is lent rather than spent, so it is offered before a wildcard,
+    // which takes a card out of the game for good.
+    const park = opening.moves.filter((m) => m.to.zone === 'reserve');
     if (park.length) return { kind: 'park', moves: park };
     const wild = this.wildMoves();
     if (wild.length) return { kind: 'wild', moves: wild };
+    // The search ran out of room rather than out of answers. The position is
+    // far too tangled to call dead, so hand back what is legal and let the
+    // player keep going.
+    if (!opening.complete) {
+      const legal = this.allMoves().filter((m) => m.to.zone !== 'reserve');
+      if (legal.length) return { kind: 'split', moves: legal };
+    }
     return { kind: 'over', moves: [] };
   }
 
   /**
-   * Cards worth parking in a free reserve slot. A slot is only a way out when
-   * lifting the card changes something: it uncovers a face-down card, empties
-   * a column, or exposes a card that gives the board a move it did not have.
-   * Shuffling one card in and out forever is not a way out, so those are not
-   * listed and do not keep a dead run alive.
+   * Does this move get anywhere? A move gains when it binds a rune, turns a
+   * card over, empties a column, or lays a whole run onto a card -- the last
+   * because it joins two sequences without breaking one, which is the only
+   * board move that leaves the tableau strictly more ordered than it found it.
+   *
+   * Everything else is a rearrangement: splitting a run, filling an empty
+   * column, parking a card and taking it back. Those are legal and often
+   * necessary, but a position with nothing but rearrangements has not moved
+   * forward, which is what makes them safe to search through.
    */
-  parkMoves() {
+  static gains(m) {
+    if (m.to.zone === 'reserve') return !!m.exposes;
+    return m.seals || m.exposes || m.empties || (m.wholeRun && !m.destEmpty);
+  }
+
+  /** Every legal move in the position, undeduped -- what a search needs. */
+  allMoves() {
     const s = this.state;
-    if (s.phase !== 'play') return [];
-    const slot = s.reserve.indexOf(null);
-    if (slot < 0) return [];
-
     const out = [];
+    const from = (spec, tail) => {
+      const run = this.takeRun(spec);
+      if (!run || !run.length || run.some((c) => !c.faceUp)) return;
+      const col = spec.zone === 'col' ? s.columns[spec.index] : null;
+      const under = col && col.length > run.length ? col[col.length - run.length - 1] : null;
+      for (let j = 0; j < s.columns.length; j++) {
+        if (spec.zone === 'col' && j === spec.index) continue;
+        if (!s.columns[j].length && spec.zone === 'col' && spec.count === col.length) continue;
+        const to = { zone: 'col', index: j };
+        if (!this.canDrop(run, to)) continue;
+        out.push({ from: spec, to, wholeRun: spec.zone === 'reserve' || spec.count === tail,
+          ...this.moveScore(spec, to) });
+      }
+      for (let k = 0; k < s.reserve.length; k++) {
+        const to = { zone: 'reserve', index: k };
+        if (!this.canDrop(run, to)) continue;
+        out.push({ from: spec, to, wholeRun: true, seals: false, resultRun: 1,
+          exposes: !!(under && !under.faceUp), empties: !!(col && col.length === 1), destEmpty: false });
+      }
+    };
     for (let i = 0; i < s.columns.length; i++) {
-      const col = s.columns[i];
-      if (!col.length) continue;
-      const foot = col[col.length - 1];
-      if (!foot.faceUp) continue;
-      const move = { from: { zone: 'col', index: i, count: 1 }, to: { zone: 'reserve', index: slot } };
-
-      if (col.length > 1 && !col[col.length - 2].faceUp) { out.push(move); continue; }
-
-      // Nothing is turned over by lifting it -- emptying a column included,
-      // since an empty column is only worth what can be moved into it. So the
-      // question is whether the board opens up without the card. Try it and
-      // see, judging the result the way `suggest` judges any other position.
-      col.pop();
-      s.reserve[slot] = foot;
-      const after = this.listMoves();
-      const buried = s.columns.some((c) => c.some((x) => !x.faceUp));
-      const opens = after.some((m) => m.seals || (m.wholeRun && !m.destEmpty))
-        || (buried && after.some((m) => m.destEmpty));
-      s.reserve[slot] = null;
-      col.push(foot);
-      if (opens) out.push(move);
+      const tail = this.columnTail(i);
+      for (let n = 1; n <= tail; n++) from({ zone: 'col', index: i, count: n }, tail);
     }
+    for (let i = 0; i < s.reserve.length; i++) if (s.reserve[i]) from({ zone: 'reserve', index: i }, 1);
     return out;
+  }
+
+  /** A position, as a string, with interchangeable columns folded together. */
+  boardKey() {
+    const cols = this.state.columns
+      .map((col) => col.map((c) => `${c.rank}${c.faceUp ? '' : 'x'}`).join('.'))
+      .sort();
+    const held = this.state.reserve.map((c) => (c ? c.rank : '-')).sort();
+    return cols.join('|') + '#' + held.join(',');
+  }
+
+  /**
+   * Rearranging cards is not progress by itself, but it is often how progress
+   * is reached: a run has to come apart before the card under it can be used.
+   * So when nothing gains, search the rearrangements -- splits, empty columns,
+   * parking -- for a position where something does.
+   *
+   * The search is bounded, and a bound reached without an answer is read as
+   * "keep playing". Ending a run because the search gave up would be the one
+   * mistake here that cannot be taken back.
+   *
+   * @returns {{moves: object[], complete: boolean}} first moves of lines that
+   *   reach a gaining position, and whether the search finished rather than
+   *   running out of room.
+   */
+  openingMoves({ nodes = 1500, depth = 6 } = {}) {
+    // The search runs on a copy, so a throw anywhere in it cannot leave the
+    // real board holding cards in the wrong place.
+    const probe = Object.create(Game.prototype);
+    probe.state = structuredClone(this.state);
+    probe.undoStack = [];
+    probe.difficulty = this.difficulty;
+
+    let budget = nodes;
+    const seen = new Set([probe.boardKey()]);
+    const walk = (at) => {
+      const moves = probe.allMoves();
+      if (moves.some((m) => Game.gains(m))) return true;
+      if (at >= depth) return false;
+      for (const m of moves) {
+        if (budget <= 0) return false;
+        budget--;
+        probe.shift(m);
+        const key = probe.boardKey();
+        let found = false;
+        if (!seen.has(key)) { seen.add(key); found = walk(at + 1); }
+        probe.unshift(m);
+        if (found) return true;
+      }
+      return false;
+    };
+
+    // Board moves before parks: a slot held is a slot not available later.
+    const openers = probe.allMoves().sort((a, b) =>
+      (a.to.zone === 'reserve' ? 1 : 0) - (b.to.zone === 'reserve' ? 1 : 0));
+    const moves = [];
+    for (const opener of openers) {
+      if (budget <= 0) break;
+      budget--;
+      probe.shift(opener);
+      const key = probe.boardKey();
+      let found = false;
+      // Positions already ruled out under an earlier opener are not walked
+      // again: whether anything is reachable at all is settled by the union of
+      // the walks, even though a later opener may go unlisted because of it.
+      if (!seen.has(key)) { seen.add(key); found = walk(1); }
+      probe.unshift(opener);
+      if (found) moves.push(opener);
+    }
+    return { moves, complete: budget > 0 };
+  }
+
+  /**
+   * Carry a run across with no settling, and put it back again. A
+   * rearrangement never turns a card over or binds a rune, so these are exact
+   * inverses and a search can walk with them instead of copying the board at
+   * every step. Only ever used inside a search, on a copy.
+   */
+  shift(move) {
+    const s = this.state;
+    const run = this.takeRun(move.from);
+    if (move.from.zone === 'reserve') s.reserve[move.from.index] = null;
+    else s.columns[move.from.index].length -= run.length;
+    if (move.to.zone === 'reserve') s.reserve[move.to.index] = run[0];
+    else s.columns[move.to.index].push(...run);
+  }
+
+  unshift(move) {
+    const s = this.state;
+    const n = move.from.zone === 'reserve' ? 1 : move.from.count;
+    let run;
+    if (move.to.zone === 'reserve') {
+      run = [s.reserve[move.to.index]];
+      s.reserve[move.to.index] = null;
+    } else {
+      const col = s.columns[move.to.index];
+      run = col.splice(col.length - n, n);
+    }
+    if (move.from.zone === 'reserve') s.reserve[move.from.index] = run[0];
+    else s.columns[move.from.index].push(...run);
+  }
+
+  /** Parking that leads somewhere, kept apart so it is advised last. */
+  parkMoves() {
+    if (this.state.phase !== 'play') return [];
+    return this.openingMoves().moves.filter((m) => m.to.zone === 'reserve');
   }
 
   /** Columns a held wildcard could still be spent on. */

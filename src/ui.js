@@ -719,7 +719,8 @@ function hintStatusText() {
   if (hint.kind === 'over') return 'No moves and nothing to deal — the run is over';
   const what = hint.kind === 'empty' ? 'Only empty-column moves'
     : hint.kind === 'park' ? 'Only a reserve slot left'
-      : 'Showing hint';
+      : hint.kind === 'split' ? 'Only breaking a run leads anywhere'
+        : 'Showing hint';
   return `${what} ${hint.index + 1}/${hint.moves.length}`;
 }
 
@@ -993,8 +994,9 @@ function rulesHtml() {
         <b>advance</b>, choose a boon, and face a fresh board.</li>
         <li>Every rank deals <b>one more sequence than the last</b>, and all of them must go. The boons you
         take are what close that gap.</li>
-        <li>Three undos per rank. The climb ends only when nothing is left to do — no move, no
-        row to deal, no reserve slot worth using and no wildcard in hand.</li>
+        <li>Three undos per rank. The climb ends only when nothing is left that leads anywhere —
+        including breaking a run apart, a reserve slot and a wildcard in hand. If a line exists,
+        the hint will find it.</li>
       </ul>
       <h3>Boons &amp; Keys</h3>
       <ul>

@@ -1008,3 +1008,89 @@ test('granted undos cannot be farmed by undoing the grant away', () => {
   }
   assert.equal(g.state.extraUndos, EXTRA_UNDOS_PER_RANK, 'the cap held across undos');
 });
+
+// ------------------------------------------------ breaking runs to get on
+
+/** A board of inert King pairs, so only the columns under test can move. */
+function tangle(build, patch = {}) {
+  const g = new Game({ seed: 'SPLIT', difficulty: 'adept' });
+  g.state.columns = g.state.columns.map(() => [up(13, 'spade'), up(13, 'spade')]);
+  g.state.stock = [];
+  g.state.reserve = [];
+  g.state.wilds = 0;
+  build(g);
+  Object.assign(g.state, patch);
+  g.undoStack = [];
+  return g;
+}
+
+test('a run is broken up when that is what leads somewhere', () => {
+  // One slot is not enough on its own: park the 7 and the 8 left behind still
+  // wants a 9. Break the run onto the other 8 first and the slot then takes
+  // the 8, which clears the column down to the card face down under it.
+  const g = tangle((s) => {
+    s.state.columns[0] = [makeCard(2, 'spade', false), up(8, 'spade'), up(7, 'spade')];
+    s.state.columns[1] = [up(13, 'spade'), up(8, 'spade')];
+    s.state.reserve = [null];
+  });
+  g.settle();
+  assert.equal(g.state.phase, 'play', 'the run does not end while a line exists');
+
+  const s = g.suggest();
+  assert.equal(s.kind, 'split');
+  assert.deepEqual(s.moves[0].from, { zone: 'col', index: 0, count: 1 }, 'lift only the 7');
+  assert.equal(s.moves[0].to.index, 1);
+
+  // Playing the advice really does reach the gain it promised.
+  g.move(s.moves[0].from, s.moves[0].to);
+  const then = g.suggest();
+  assert.equal(then.kind, 'park');
+  g.move(then.moves[0].from, then.moves[0].to);
+  assert.ok(g.state.columns[0].every((c) => c.faceUp), 'the buried card is turned over');
+});
+
+test('a legal move that leads nowhere does not keep a dead run standing', () => {
+  const g = tangle((s) => {
+    s.state.columns[0] = [makeCard(2, 'spade', false), up(8, 'spade'), up(7, 'spade')];
+    s.state.columns[1] = [up(13, 'spade'), up(8, 'spade')];
+    s.state.reserve = [up(4, 'spade')];        // the slot is already spoken for
+  });
+  assert.equal(g.allMoves().length, 1, 'there is a legal move');
+  assert.equal(g.suggest().kind, 'over', 'but it goes nowhere');
+  g.settle();
+  assert.equal(g.state.phase, 'failed');
+});
+
+test('searching for a line never disturbs the board', () => {
+  const g = tangle((s) => {
+    s.state.columns[0] = [makeCard(2, 'spade', false), up(8, 'spade'), up(7, 'spade')];
+    s.state.columns[1] = [up(13, 'spade'), up(8, 'spade')];
+    s.state.reserve = [null, null];
+  });
+  const before = JSON.stringify({
+    cols: g.state.columns.map((c) => c.map((x) => [x.id, x.faceUp])),
+    reserve: g.state.reserve,
+  });
+  g.openingMoves();
+  g.suggest();
+  g.hasLegalMove();
+  assert.equal(JSON.stringify({
+    cols: g.state.columns.map((c) => c.map((x) => [x.id, x.faceUp])),
+    reserve: g.state.reserve,
+  }), before);
+});
+
+test('splitting a run to seal a rune is offered outright, not as a last resort', () => {
+  const col = [];
+  for (let r = 13; r >= 2; r--) col.push(up(r, 'spade'));   // K down to 2
+  const g = tangle((s) => {
+    s.state.columns[0] = col;
+    // The Ace is the foot of a 3-2-A run. The run cannot follow the 2 in the
+    // long column -- a 3 does not go on a 2 -- so the Ace has to be broken off
+    // on its own, and that binds the rune.
+    s.state.columns[1] = [up(13, 'spade'), up(3, 'spade'), up(2, 'spade'), up(1, 'spade')];
+  });
+  const s = g.suggest();
+  assert.equal(s.kind, 'moves', 'a seal is never buried down the chain');
+  assert.ok(s.moves[0].seals);
+});

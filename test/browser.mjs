@@ -690,6 +690,44 @@ for (const view of VIEWS) {
     }
   });
 
+  await check('breaking a run is advised, and animated, when it is the only line', async () => {
+    await hintOff(page);
+    await stash(page);
+    try {
+      const kind = await page.evaluate(() => {
+        const g = window.Ascendant.game;
+        const up = (r) => ({ id: 9700 + Math.random() * 1e6 | 0, rank: r, suit: 'spade', faceUp: true, wild: false });
+        g.state.columns = g.state.columns.map(() => [up(13), up(13)]);
+        // Parking the 7 leaves an 8 still wanting a 9; breaking the run onto
+        // the other 8 first frees the slot for the 8 and clears the column.
+        g.state.columns[0] = [
+          { id: 9690, rank: 2, suit: 'spade', faceUp: false, wild: false }, up(8), up(7)];
+        g.state.columns[1] = [up(13), up(8)];
+        g.state.stock = [];
+        g.state.wilds = 0;
+        g.state.reserve = [null];
+        window.Ascendant.render();
+        const s = g.suggest();
+        return { kind: s.kind, count: s.moves[0] && s.moves[0].from.count, phase: g.state.phase };
+      });
+      if (kind.kind !== 'split') throw new Error('expected a split, got ' + kind.kind);
+      if (kind.count !== 1) throw new Error('the whole run was lifted, not the top card');
+      if (kind.phase !== 'play') throw new Error('the run ended while a line existed');
+
+      await page.click('#btn-hint');
+      await page.waitForTimeout(250);
+      const shown = await page.evaluate(() => ({
+        ghosts: document.querySelectorAll('.hint-layer .card').length,
+        text: document.querySelector('#status').textContent,
+      }));
+      if (shown.ghosts !== 1) throw new Error(`the ghost showed ${shown.ghosts} cards, not the one to break off`);
+      if (!/break/i.test(shown.text)) throw new Error('the dock did not say what it was advising');
+    } finally {
+      await hintOff(page);
+      await unstash(page);
+    }
+  });
+
   await check('any action cancels the hint', async () => {
     if (!(await page.evaluate(() => !!document.querySelector('.hint-layer')))) {
       await page.click('#btn-hint');

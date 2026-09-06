@@ -122,11 +122,27 @@ something over or open a move that is not there now, and then a **wildcard**,
 which is offered last because it is the only one that costs something
 permanent.
 
+Below all of that is the search. Rearranging cards — breaking a run apart,
+filling an empty column, parking and unparking — gains nothing by itself, but
+it is often how a gain is reached: a run has to come apart before the card
+under it can be used. So when nothing on the board gains, the engine searches
+those rearrangements for a position where something does, and advises the
+first move of the line it finds.
+
+A move **gains** when it binds a rune, turns a card over, empties a column, or
+lays a whole run onto a card — that last one because it joins two sequences
+without breaking one, the only board move that leaves the tableau strictly
+more ordered than it found it. Everything else is a rearrangement, which is
+what makes them safe to search through.
+
 That whole chain is also the game-over test — `hasLegalMove` is exactly
 "the hint has something to say". A run can never end on a move the hint would
 have shown, and the hint can never point at a run the game has already ended.
-Parking a card that only comes straight back is not a way out, and does not
-keep a dead run alive.
+A legal move that leads nowhere — a card parked that can only come back, a run
+split and re-stacked — is not a way out and does not keep a dead run standing.
+The search is bounded, and a bound reached without an answer is read as "keep
+playing": ending a run because the search gave up is the one mistake here that
+cannot be taken back.
 
 `Space` deals · `U` or `Ctrl/⌘+Z` undoes · `H` toggles hints · `Esc` stops them.
 
