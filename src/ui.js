@@ -347,7 +347,7 @@ function renderDock() {
   if (hint) {
     status.appendChild(el('span', 'hint-count', hintStatusText()));
   } else if (game.isStagnant()) {
-    status.appendChild(el('span', 'warn', '⚠ No moves left — undo, or walk away.'));
+    status.appendChild(el('span', 'warn', '⚠ Nothing left to play — undo, or call it.'));
   } else if (s.log[0]) {
     status.appendChild(el('span', '', s.log[0]));
   }
@@ -716,7 +716,7 @@ function hintStatusText() {
   if (!hint) return '';
   if (hint.kind === 'deal') return 'No moves left — deal another row';
   if (hint.kind === 'wild') return 'Only a wildcard left — drop one on a lit column';
-  if (hint.kind === 'over') return 'No moves and nothing to deal — the run is over';
+  if (hint.kind === 'over') return 'Nothing left to play — that is the run';
   const what = hint.kind === 'empty' ? 'Only empty-column moves'
     : hint.kind === 'park' ? 'Only a reserve slot left'
       : hint.kind === 'split' ? 'Only breaking a run leads anywhere'
@@ -978,7 +978,7 @@ function rulesHtml() {
   return `<details class="rules-toggle"${isNarrow() ? '' : ' open'}>
     <summary>How to play</summary>
     <div class="rules">
-      <h3>The Tableau</h3>
+      <h3>The board</h3>
       <ul>
         <li>Build <b>down by rank</b> onto any card — suit does not matter while stacking.</li>
         <li>Cards that cannot be lifted yet are <b>dimmed</b>; free the run below them first.</li>
@@ -987,18 +987,18 @@ function rulesHtml() {
         longest sequence. Drag it instead when you want a different column.</li>
         <li>An empty column accepts anything, and the stock deals one card to every column, empty ones included.</li>
       </ul>
-      <h3>Advancement</h3>
+      <h3>Ranking up</h3>
       <ul>
-        <li>A complete <b>K→A run of one suit</b> is a <b>rune</b>. It binds itself, and goes into the core.</li>
-        <li>A rank is a <b>whole board</b>: it ends when every card has gone into the core. Only then do you
-        <b>advance</b>, choose a boon, and face a fresh board.</li>
-        <li>Every rank deals <b>one more sequence than the last</b>, and all of them must go. The boons you
-        take are what close that gap.</li>
-        <li>Three undos per rank. The climb ends only when nothing is left that leads anywhere —
+        <li>A complete <b>K→A run</b> is a <b>rune</b>. It binds itself and drops into the core.</li>
+        <li>A rank is a <b>whole board</b>: it ends when every card has gone into the core. Then you
+        <b>rank up</b>, pick a boon, and get a fresh board.</li>
+        <li>Every rank deals <b>one more sequence than the last</b>, and all of them have to go. That is
+        what the boons are for.</li>
+        <li>Three undos per rank. The run ends only when nothing is left that leads anywhere —
         including breaking a run apart, a reserve slot and a wildcard in hand. If a line exists,
         the hint will find it.</li>
       </ul>
-      <h3>Boons &amp; Keys</h3>
+      <h3>Boons &amp; keys</h3>
       <ul>
         <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on any column and it becomes the
         card that belongs there — one below whatever it lands on, or a King in an empty column.
@@ -1023,7 +1023,7 @@ function supportRow() {
   if (!adsReady()) return null;
   const box = el('div', 'support');
   if (adsPremium()) {
-    box.appendChild(el('p', 'fine', 'Ad-free. Thank you for supporting the climb.'));
+    box.appendChild(el('p', 'fine', 'Ad-free — thanks for the support.'));
     return box;
   }
   const buy = el('button', '', 'Remove ads');
@@ -1042,7 +1042,7 @@ function supportRow() {
     if (ok) pauseScreen();
   };
   box.append(buy, restore);
-  box.appendChild(el('p', 'fine', 'One payment. Removes the breaks between runs; rewards stay yours to take.'));
+  box.appendChild(el('p', 'fine', 'One payment, no more breaks between runs. Rewards are still yours to take.'));
   return box;
 }
 
@@ -1050,12 +1050,12 @@ function pauseScreen() {
   const p = el('div', 'panel');
   p.appendChild(el('div', 'mark-big', '❖'));
   p.appendChild(el('h2', '', 'Paused'));
-  p.appendChild(el('p', '', 'The climb waits.'));
+  p.appendChild(el('p', '', 'No rush.'));
   p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b>`
     + ` · ${DIFFICULTIES[game.difficulty].name} · build ${buildTag()}`));
   const held = boonSummary(game.state.boons);
   if (!held.length) {
-    p.appendChild(el('p', '', 'No boons yet. Clear a board to earn one.'));
+    p.appendChild(el('p', '', 'No boons yet — clear a board to earn one.'));
   } else {
     p.appendChild(el('p', '', 'Boons held: ' + held
       .map((u) => `<b style="color:var(--gold)">${u.sigil} ${u.name} ×${u.count}</b>`).join(' · ')));
@@ -1063,7 +1063,7 @@ function pauseScreen() {
   const row = el('div');
   const resume = el('button', 'big', 'Resume');
   resume.onclick = () => { closeOverlay(); render(); };
-  const quit = el('button', '', 'Abandon this climb');
+  const quit = el('button', '', 'Quit this run');
   quit.style.marginLeft = '10px';
   quit.onclick = () => { titleScreen(); };
   row.append(resume, quit);
@@ -1080,21 +1080,21 @@ function titleScreen() {
   p.innerHTML = `
     <div class="mark-big">✧</div>
     <h1>ASCENDANT</h1>
-    <p class="lead">A progression-fantasy roguelike played in Spider solitaire. A rank is a
-    whole board: clear every K→A sequence and you advance — but the next rank deals one more
-    sequence than the last, and all of them must go into the core.</p>
-    ${best ? `<p>Greatest power attained: <b style="color:var(--gold)">${best}</b></p>` : ''}
+    <p class="lead">Spider solitaire, run by run. Clear the whole board to rank up — then the
+    next rank deals one more sequence than the last, and you have to clear that too. Boons are
+    how you keep up.</p>
+    ${best ? `<p>Best run so far: <b style="color:var(--gold)">${best}</b></p>` : ''}
     <div class="setup">
       <div class="field"><label>Seed</label><input id="seed-input" placeholder="random" /></div>
       <div class="field"><label>Difficulty</label>
         <select id="diff-input">
           <option value="novice">Novice — 5 sequences to open</option>
-          <option value="adept" selected>Adept — 6 to open, the intended climb</option>
+          <option value="adept" selected>Adept — 6 to open, the one to play</option>
           <option value="immortal">Merciless — 8 sequences to open</option>
         </select>
       </div>
     </div>
-    <button class="big" id="btn-begin">Begin the Climb</button>
+    <button class="big" id="btn-begin">Start a run</button>
     <div id="resume-wrap"></div>
     ${rulesHtml()}`;
   overlay(p);
@@ -1126,11 +1126,11 @@ function breakthroughScreen() {
   const next = RANKS[s.rank];
   const p = el('div', 'panel');
   p.appendChild(el('div', 'mark-big', RANKS[s.rank - 1].mark));
-  p.appendChild(el('h1', '', 'ADVANCEMENT'));
+  p.appendChild(el('h1', '', 'RANK UP'));
   p.appendChild(el('p', 'lead',
-    `${RANKS[s.rank - 1].name} is cleared. Ahead lies <b style="color:var(--gold)">${next.name}</b>, `
-    + `a board of <b style="color:var(--gold)">${game.rankConfig(s.rank + 1).required} sequences</b>, all of which must go.`));
-  p.appendChild(el('p', '', 'Take one. It lasts the rest of the run.'));
+    `${RANKS[s.rank - 1].name} done. Next is <b style="color:var(--gold)">${next.name}</b>: `
+    + `<b style="color:var(--gold)">${game.rankConfig(s.rank + 1).required} sequences</b>, and all of them have to go.`));
+  p.appendChild(el('p', '', 'Pick one. You keep it for the rest of the run.'));
   const offer = el('div', 'offer');
   s.offer.forEach((boon, i) => {
     const b = el('div', 'boon');
@@ -1160,10 +1160,11 @@ function endScreen(won) {
 
   const p = el('div', 'panel');
   p.appendChild(el('div', 'mark-big', won ? TRANSCENDENCE.mark : '✧'));
-  p.appendChild(el('h1', '', won ? 'TRANSCENDENCE' : 'THE CORE GOES DARK'));
+  p.appendChild(el('h1', '', won ? 'IMMORTALITY' : 'RUN OVER'));
   p.appendChild(el('p', 'lead', won
-    ? 'Six ranks cleared, every rune bound. Whatever you are now, it is not what started.'
-    : `You stalled at ${RANKS[s.rank - 1].name}. The core keeps what it took, and nothing more.`));
+    ? 'All six ranks, every rune. Turns out you were meant for it.'
+    : `You made it to <b style="color:var(--gold)">${RANKS[s.rank - 1].name}</b>. `
+      + "That's decent — but not everyone's meant for immortality."));
 
   const tally = el('div', 'tally');
   const stat = (n, k) => {
@@ -1172,10 +1173,10 @@ function endScreen(won) {
     d.appendChild(el('div', 'k', k));
     return d;
   };
-  tally.appendChild(stat(RANKS[s.rank - 1].name, 'Rank reached'));
-  tally.appendChild(stat(s.totalRunes, 'Runes bound'));
+  tally.appendChild(stat(RANKS[s.rank - 1].name, 'Got to'));
+  tally.appendChild(stat(s.totalRunes, 'Runes'));
   tally.appendChild(stat(s.moves, 'Moves'));
-  tally.appendChild(stat(score, 'Power'));
+  tally.appendChild(stat(score, 'Score'));
   p.appendChild(tally);
 
   const held = boonSummary(s.boons);
@@ -1197,7 +1198,7 @@ function endScreen(won) {
     wind.onclick = async () => {
       wind.disabled = true;
       const earned = await playReward('reprieve');
-      if (!earned) { wind.disabled = false; toast('The core stays dark'); return; }
+      if (!earned) { wind.disabled = false; toast('Nothing earned'); return; }
       game.reprieve();
       shownPhase = 'play';
       closeOverlay();
@@ -1212,10 +1213,10 @@ function endScreen(won) {
     p.appendChild(el('p', 'fine', REWARDS.reprieve.blurb));
   }
 
-  const again = el('button', 'big', 'Climb again');
+  const again = el('button', 'big', 'Go again');
   again.style.marginRight = '10px';
   again.onclick = leave(() => start(randomSeed(), game.difficulty));
-  const retry = el('button', '', 'Retry this seed');
+  const retry = el('button', '', 'Same seed');
   retry.onclick = leave(() => start(game.seed, game.difficulty));
   const menu = el('button', '', 'Main menu');
   menu.style.marginLeft = '10px';

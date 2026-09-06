@@ -126,7 +126,7 @@ export class Game {
     s.phase = 'play';
     s.offer = [];
     this.undoStack = [];
-    this.log(`${RANKS[rank - 1].name}: bind ${cfg.required} rune${cfg.required > 1 ? 's' : ''}.`);
+    this.log(`${RANKS[rank - 1].name} — ${cfg.required} rune${cfg.required > 1 ? 's' : ''} to clear.`);
     this.settle();
   }
 
@@ -257,7 +257,7 @@ export class Game {
       s.columns[i].push(card);
     }
     s.moves++;
-    this.log('Another row falls.');
+    this.log('Another row down.');
     this.settle();
     return true;
   }
@@ -395,11 +395,11 @@ export class Game {
     s.moves++;
     const label = RANK_LABEL[plan.value.rank];
     this.log({
-      stock: `A wildcard settles as ${label}, taking one out of the undealt stock.`,
-      hidden: `A wildcard settles as ${label}, burning a face-down one away.`,
-      faceup: `A wildcard settles as ${label}, swallowing the last one on the board.`,
-      reserve: `A wildcard settles as ${label}, drawn out of the reserve.`,
-      free: `A wildcard settles as ${label}. Nothing was left to pay with, so it comes free.`,
+      stock: `Wildcard becomes ${label} — one taken out of the stock.`,
+      hidden: `Wildcard becomes ${label} — a face-down one goes.`,
+      faceup: `Wildcard becomes ${label} — the other one comes off the board.`,
+      reserve: `Wildcard becomes ${label} — taken out of the reserve.`,
+      free: `Wildcard becomes ${label} — nothing left to take, so it is free.`,
     }[plan.cost]);
     this.settle();
     return { cost: plan.cost, removed, value: plan.value };
@@ -441,17 +441,17 @@ export class Game {
     if (s.runes >= s.required) {
       if (s.rank >= RANKS.length) {
         s.phase = 'ascended';
-        this.log('The core takes the last of it. You do not come back down.');
+        this.log('That is the last of it. Immortality suits you.');
       } else {
         s.phase = 'breakthrough';
         s.offer = offerBoons(s.boons);
-        this.log(`${RANKS[s.rank - 1].name} cleared. Advancement.`);
+        this.log(`${RANKS[s.rank - 1].name} cleared. Rank up.`);
       }
       return;
     }
     if (!this.hasLegalMove()) {
       s.phase = 'failed';
-      this.log('The core goes dark. The climb ends here.');
+      this.log('Nothing left to play. That is the run.');
     }
   }
 
@@ -497,7 +497,7 @@ export class Game {
     s.wilds++;
     s.undosLeft++;
     this.undoStack = [];
-    this.log('A second wind: one wildcard, and one more move to take back.');
+    this.log('Second wind: a wildcard, and one more undo.');
     return true;
   }
 
@@ -517,7 +517,7 @@ export class Game {
   concede() {
     if (this.state.phase === 'play') {
       this.state.phase = 'failed';
-      this.log('You walk away from it.');
+      this.log('You call it there.');
     }
   }
 
