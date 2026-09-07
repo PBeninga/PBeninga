@@ -7,24 +7,24 @@
 
 const KEY = 'ascendant/sound';
 
-let ctx = null;
-let on = true;
-let store = null;
+let audioCtx = null;
+let soundIsOn = true;
+let soundStore = null;
 
 /** Read the saved preference. Sound is on unless the player turned it off. */
 export function soundSetup(s) {
-  store = s;
-  try { on = store.get(KEY) !== 'off'; } catch (_) { on = true; }
-  return on;
+  soundStore = s;
+  try { soundIsOn = soundStore.get(KEY) !== 'off'; } catch (_) { soundIsOn = true; }
+  return soundIsOn;
 }
 
-export function soundOn() { return on; }
+export function soundOn() { return soundIsOn; }
 
 export function setSoundOn(next) {
-  on = !!next;
-  try { if (store) store.set(KEY, on ? 'on' : 'off'); } catch (_) { /* private browsing */ }
-  if (on) resume();
-  return on;
+  soundIsOn = !!next;
+  try { if (soundStore) soundStore.set(KEY, soundIsOn ? 'on' : 'off'); } catch (_) { /* private browsing */ }
+  if (soundIsOn) resume();
+  return soundIsOn;
 }
 
 /**
@@ -32,15 +32,15 @@ export function setSoundOn(next) {
  * it was built too early, so every entry point tries to wake it.
  */
 function audio() {
-  if (!on) return null;
+  if (!soundIsOn) return null;
   try {
-    if (!ctx) {
+    if (!audioCtx) {
       const Ctor = window.AudioContext || window.webkitAudioContext;
       if (!Ctor) return null;
-      ctx = new Ctor();
+      audioCtx = new Ctor();
     }
-    if (ctx.state === 'suspended') ctx.resume();
-    return ctx;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
   } catch (_) {
     return null;
   }
@@ -113,10 +113,10 @@ let buzzer = null;
 export function setBuzzer(fn) { buzzer = fn; }
 
 export function buzz(pattern = 10) {
-  if (!on) return false;
+  if (!soundIsOn) return false;
   if (buzzer) { try { buzzer(pattern); return true; } catch (_) { return false; } }
   try { return !!(navigator.vibrate && navigator.vibrate(pattern)); } catch (_) { return false; }
 }
 
 /** Test seam. */
-export function soundReset() { ctx = null; on = true; store = null; buzzer = null; }
+export function soundReset() { audioCtx = null; soundIsOn = true; soundStore = null; buzzer = null; }

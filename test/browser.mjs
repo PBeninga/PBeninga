@@ -102,6 +102,50 @@ const unstash = (page) => page.evaluate(() => {
 
 const browser = await chromium.launch();
 
+// --- the shipped file, before anything else ----------------------------
+// Everything below this loads index.html, which pulls the modules separately,
+// each with a scope of its own. The release is one file with all of them
+// inlined into one scope, so it can break in ways the dev page cannot -- and
+// did: two modules declaring the same name made a bundle that would not parse,
+// and a blank page, while every check here passed. So the first thing tested
+// is the artefact that actually ships.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1100, height: 800 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  console.log('\nbuilt bundle');
+  await check('the built single-file bundle boots', async () => {
+    await page.goto(`${BASE}/dist/index.html`);
+    await page.waitForTimeout(400);
+    const live = await page.evaluate(() => ({
+      handle: !!window.Ascendant,
+      title: !!document.querySelector('#overlay .panel h1'),
+      buttons: document.querySelectorAll('#overlay button').length,
+    }));
+    if (errors.length) throw new Error('console: ' + errors.join(' | '));
+    if (!live.handle) throw new Error('the game never booted');
+    if (!live.title || !live.buttons) throw new Error('the title screen did not render');
+  });
+
+  await check('a run plays in the built bundle', async () => {
+    await page.evaluate(() => window.Ascendant.start('BUNDLE', 'adept'));
+    await page.waitForTimeout(300);
+    const played = await page.evaluate(() => {
+      const g = window.Ascendant.game;
+      const before = g.state.moves;
+      g.deal();
+      window.Ascendant.render();
+      return { cards: document.querySelectorAll('#board .card').length, moved: g.state.moves > before };
+    });
+    if (!played.cards) throw new Error('no cards drawn');
+    if (!played.moved) throw new Error('the engine did not respond');
+    if (errors.length) throw new Error('console: ' + errors.join(' | '));
+  });
+  await ctx.close();
+}
+
 // --- one pass per form factor ------------------------------------------
 const VIEWS = [
   { tag: 'desktop', ctx: { viewport: { width: 1440, height: 900 } }, touch: false },

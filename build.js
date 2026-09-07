@@ -17,12 +17,48 @@ function stripModuleSyntax(src) {
     .replace(/^export\s+(?=(const|let|var|function|class|async))/gm, '');
 }
 
-const bundle = MODULES
-  .map((name) => {
-    const src = readFileSync(join(root, 'src', name), 'utf8');
-    return `/* ---- src/${name} ---- */\n${stripModuleSyntax(src).trim()}\n`;
-  })
+const stripped = MODULES.map((name) =>
+  [name, stripModuleSyntax(readFileSync(join(root, 'src', name), 'utf8')).trim()]);
+checkNames(stripped);
+
+const bundle = stripped
+  .map(([name, src]) => `/* ---- src/${name} ---- */\n${src}\n`)
   .join('\n');
+checkParses(bundle);
+
+/**
+ * The modules become one scope, so two of them declaring the same top-level
+ * name is a syntax error in the shipped file and nowhere else -- the dev page
+ * loads real modules, each with a scope of its own, and never notices. Say so
+ * here, by name, rather than letting the browser report it as a blank page.
+ */
+function checkNames(sources) {
+  const owner = new Map();
+  const clashes = [];
+  const DECL = /^(?:export\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm;
+  for (const [name, src] of sources) {
+    const seen = new Set();
+    let m;
+    DECL.lastIndex = 0;
+    while ((m = DECL.exec(src))) seen.add(m[1]);
+    for (const id of seen) {
+      if (owner.has(id)) clashes.push(`${id} (${owner.get(id)} and ${name})`);
+      else owner.set(id, name);
+    }
+  }
+  if (clashes.length) {
+    throw new Error('two modules declare the same top-level name:\n  ' + clashes.join('\n  '));
+  }
+}
+
+/** And whatever the checks above miss, the parser will not. */
+function checkParses(js) {
+  try {
+    new Function(js);
+  } catch (e) {
+    throw new Error(`the bundle does not parse: ${e.message}`);
+  }
+}
 
 // A short content hash, so a player can see at a glance which build they have
 // and whether a cached page is stale.
