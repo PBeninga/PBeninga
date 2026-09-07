@@ -677,9 +677,9 @@ function attempt(from, to, { animate = false } = {}) {
   if (!ok) { playSound('deny'); return false; }
   const seals = game.state.lastSealed || [];
   if (seals.length) {
+    // No toast: the cards flying into the core say it, and the dock logs it.
     playSound('seal');
     buzz([12, 40, 18]);
-    toast(seals.length > 1 ? `${seals.length} runes bound` : 'Rune bound');
   } else {
     playSound('move');
     buzz(8);
