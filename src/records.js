@@ -131,15 +131,16 @@ export function noteDaily(store, result, today = dayKey()) {
 }
 
 /**
- * The result as something worth pasting somewhere. Six pips, one per rank:
- * filled for cleared, half for the one you died on, empty for what you never
- * saw. It gives away nothing about the board.
+ * The result as something worth pasting somewhere. Six blocks, one per rank:
+ * solid for cleared, half for the one you died on, empty for what you never
+ * saw. It gives away nothing about the board, and it is type rather than
+ * emoji -- this game does not decorate with pictures of squares.
  */
 export function shareText(result, ranks = 6) {
   const cleared = result.won ? ranks : Math.max(0, result.rank - 1);
   const pips = [];
   for (let i = 0; i < ranks; i++) {
-    pips.push(i < cleared ? '🟨' : (i === cleared && !result.won ? '🟦' : '⬜'));
+    pips.push(i < cleared ? '█' : (i === cleared && !result.won ? '▓' : '░'));
   }
   const head = result.daily
     ? `Ascendant — Daily ${dayLabel(result.daily)}`

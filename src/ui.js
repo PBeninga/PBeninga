@@ -199,13 +199,33 @@ function renderTop() {
 // What the core burns like at each rank, and after. An ember through to
 // something with no colour left to take.
 const CORE_COLOURS = [
-  { a: '255,168,84', b: '226,86,44' },     // I   Ember
-  { a: '206,220,238', b: '110,140,182' },  // II  Iron
-  { a: '232,242,255', b: '146,186,234' },  // III Silver
-  { a: '255,224,150', b: '198,150,60' },   // IV  Gold
-  { a: '255,255,255', b: '186,166,255' },  // V   Radiant
-  { a: '238,214,255', b: '146,104,232' },  // VI  Sovereign
+  { a: '255,168,84', b: '226,98,43' },     // I   Ember      hot
+  { a: '255,178,92', b: '216,112,44' },    // II  Iron
+  { a: '255,190,104', b: '214,132,50' },   // III Silver
+  { a: '255,204,118', b: '222,156,60' },   // IV  Gold
+  { a: '255,222,150', b: '232,182,76' },   // V   Radiant
+  { a: '255,238,190', b: '242,206,110' },  // VI  Sovereign  cooled to gold
 ];
+
+/**
+ * The one accent, walked from ember to gold as the run climbs. There is never
+ * a second colour beside it -- the rank changes its warmth, nothing more.
+ */
+const ACCENTS = [
+  ['#e2622b', '#8a3d1c'],
+  ['#d8703a', '#84431f'],
+  ['#d68432', '#7f4c1c'],
+  ['#de9c3c', '#845a1e'],
+  ['#e8b64c', '#8a6a24'],
+  ['#f2ce6e', '#907a34'],
+];
+
+function paintAccent(rank) {
+  const [hot, dim] = ACCENTS[Math.min(ACCENTS.length, Math.max(1, rank)) - 1];
+  const root = document.documentElement.style;
+  root.setProperty('--accent', hot);
+  root.setProperty('--accent-dim', dim);
+}
 const TRANSCENDENT = { a: '255,255,255', b: '255,240,200' };
 const BURST_MS = 1100;
 const BURST_SWAP_MS = 430;
@@ -264,6 +284,7 @@ function renderCore() {
   const size = 6 + Math.pow(p, 0.7) * boardH * 0.78;
   core.style.setProperty('--core-size', `${Math.round(size)}px`);
   core.style.setProperty('--core-glow', (0.34 + 0.5 * p).toFixed(2));
+  paintAccent(game.state.rank);
   // Not while a burst owns the colour -- it swaps mid-collapse on purpose.
   if (!core.classList.contains('bursting')) {
     paintCore(game.state.phase === 'ascended' ? TRANSCENDENT : coreColour(game.state.rank));
@@ -1024,7 +1045,7 @@ function overlay(html) {
 function closeOverlay() { $('#overlay').hidden = true; }
 
 function rulesHtml() {
-  return `<details class="rules-toggle"${isNarrow() ? '' : ' open'}>
+  return `<details class="rules-toggle">
     <summary>How to play</summary>
     <div class="rules">
       <h3>The board</h3>
@@ -1129,26 +1150,28 @@ function recordsScreen() {
   const sum = summarise(runs);
   const daily = readDaily(webStore);
 
-  const p = el('div', 'panel');
-  // The record book is a list, and a list is what a phone held sideways has
-  // least room for: it loses the big sigil rather than the runs.
-  if (!isNarrow()) p.appendChild(el('div', 'mark-big', '❖'));
-  p.appendChild(el('h2', '', 'Records'));
+  const p = el('div', 'panel plate');
+  p.insertAdjacentHTML('beforeend', `<div class="lockup">
+    <div class="spade">&#9824;</div>
+    <h1>Records</h1>
+    <p class="sub">${runs.length ? `${sum.played} run${sum.played === 1 ? '' : 's'} kept`
+    : 'Nothing kept yet'}</p>
+  </div>`);
 
   if (!runs.length) {
-    p.appendChild(el('p', 'lead', 'Nothing yet. Finish a run and it lands here.'));
+    p.appendChild(el('p', 'lead', 'Finish a run and it lands here.'));
   } else {
-    const tally = el('div', 'tally');
+    const tally = el('div', 'tally standings');
     const stat = (n, k) => {
       const d = el('div');
-      d.appendChild(el('div', 'n', String(n)));
-      d.appendChild(el('div', 'k', k));
+      d.appendChild(el('b', '', String(n)));
+      d.appendChild(el('span', '', k));
       return d;
     };
-    tally.appendChild(stat(sum.played, 'Runs'));
     tally.appendChild(stat(sum.won, 'Immortal'));
     tally.appendChild(stat(sum.runes, 'Runes'));
     tally.appendChild(stat(sum.best, 'Best'));
+    if (daily.streak) tally.appendChild(stat(daily.streak, 'Streak'));
     p.appendChild(tally);
 
     const rows = Object.entries(DIFFICULTIES)
@@ -1162,10 +1185,6 @@ function recordsScreen() {
       `<table class="records"><tr><th></th><th>Runs</th><th>Best rank</th><th>Best score</th></tr>${rows}</table>`);
   }
 
-  if (daily.streak || daily.best) {
-    p.appendChild(el('p', '', `Daily streak <b style="color:var(--gold)">${daily.streak}</b>`
-      + ` · longest <b style="color:var(--gold)">${daily.best}</b>`));
-  }
 
   const recent = runs.slice(0, isNarrow() ? 4 : 8).map((r) => `<tr><td>${r.daily ? dayLabel(r.daily) : r.day.slice(5)}`
     + `${r.daily ? ' <span class="tag">daily</span>' : ''}</td>`
@@ -1178,85 +1197,92 @@ function recordsScreen() {
       `<h3>Recent</h3><div class="scroll-list"><table class="records">${recent}</table></div>`);
   }
 
-  const back = el('button', 'big', 'Back');
-  back.style.marginTop = '12px';
-  back.onclick = titleScreen;
+  const back = el('div', 'minor');
+  const b = el('button', '', 'Back');
+  b.onclick = titleScreen;
+  back.appendChild(b);
   p.appendChild(back);
   overlay(p);
 }
 
 function pauseScreen() {
-  const p = el('div', 'panel');
-  p.appendChild(el('div', 'mark-big', '❖'));
-  p.appendChild(el('h2', '', 'Paused'));
-  p.appendChild(el('p', '', 'No rush.'));
-  p.appendChild(el('p', '', `Seed <b style="color:var(--gold)">${game.seed}</b>`
-    + ` · ${DIFFICULTIES[game.difficulty].name} · build ${buildTag()}`));
-  const held = boonSummary(game.state.boons);
-  if (!held.length) {
-    p.appendChild(el('p', '', 'None yet — clear a board to earn one.'));
-  } else {
-    p.appendChild(el('p', '', 'Boons held: ' + held
-      .map((u) => `<b style="color:var(--gold)">${u.sigil} ${u.name} ×${u.count}</b>`).join(' · ')));
-  }
-  const row = el('div');
+  const s = game.state;
+  const held = boonSummary(s.boons);
+  const p = el('div', 'panel plate');
+  p.insertAdjacentHTML('beforeend', `<div class="lockup">
+    <div class="spade">${RANKS[s.rank - 1].mark}</div>
+    <h1>Paused</h1>
+    <p class="sub">${RANKS[s.rank - 1].name} &middot; ${s.runes}/${s.required} bound
+      &middot; ${DIFFICULTIES[game.difficulty].name}</p>
+  </div>`);
+  p.appendChild(el('p', 'lead', held.length
+    ? 'Held: ' + held.map((u) => `${u.sigil} ${u.name} ×${u.count}`).join(' · ')
+    : 'No boons yet — clear a board to earn one.'));
+
   const resume = el('button', 'big', 'Resume');
   resume.onclick = () => { closeOverlay(); render(); };
-  const quit = el('button', '', 'Quit this run');
-  quit.style.marginLeft = '10px';
-  quit.onclick = () => { titleScreen(); };
-  row.append(resume, quit);
-  p.appendChild(row);
-  const audio = el('button', soundOn() ? '' : 'quiet', soundOn() ? '🔊 Sound on' : '🔇 Sound off');
-  audio.style.marginTop = '12px';
+  p.appendChild(resume);
+
+  const row = el('div', 'minor');
+  const audio = el('button', '', soundOn() ? 'Sound on' : 'Sound off');
   audio.onclick = () => { setSoundOn(!soundOn()); playSound('move'); pauseScreen(); };
-  p.appendChild(el('div', '', '')).appendChild(audio);
+  const quit = el('button', '', 'Quit this run');
+  quit.onclick = () => { titleScreen(); };
+  row.append(audio, quit);
+  p.appendChild(row);
+
   const shop = supportRow();
   if (shop) p.appendChild(shop);
   p.insertAdjacentHTML('beforeend', rulesHtml());
   overlay(p);
 }
 
-/** One line about the daily: the streak, or how today went if it is done. */
-function dailyLine() {
+/** The standings, if there are any: today's result, the streak, the best run. */
+function dailyLine(best = 0) {
   const daily = readDaily(webStore);
   const today = daily.results[dayKey()];
   const bits = [];
-  if (today) {
-    bits.push(`Today: <b style="color:var(--gold)">${today.won ? 'Immortal' : today.rankName}</b>`
-      + ` · ${today.runes} rune${today.runes === 1 ? '' : 's'}`);
-  }
-  if (daily.streak) bits.push(`streak <b style="color:var(--gold)">${daily.streak}</b>`);
+  if (today) bits.push(['Today', today.won ? 'Immortal' : today.rankName]);
+  if (daily.streak) bits.push(['Streak', daily.streak]);
+  if (best) bits.push(['Best', best]);
   // Nothing to report on a first visit, and a line saying so is a line wasted.
-  return bits.length ? `<p class="fine">${bits.join(' · ')}</p>` : '';
+  if (!bits.length) return '';
+  return `<div class="standings">${bits
+    .map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('')}</div>`;
 }
 
 function titleScreen() {
   const best = Number(localStorage.getItem(BEST_KEY) || 0);
   const p = el('div', 'panel');
+  // A title lockup, not a form with a heading on it: the name is set between
+  // two rules, the settings sit under it as quiet fields, and one action
+  // carries the weight.
+  p.className = 'panel plate';
   p.innerHTML = `
-    <div class="mark-big">✧</div>
-    <h1>ASCENDANT</h1>
-    <p class="lead">Spider solitaire, run by run. Clear the board to rank up — and each rank
-    deals one more sequence than the last. Boons are how you keep up.</p>
-    ${best ? `<p>Best run so far: <b style="color:var(--gold)">${best}</b></p>` : ''}
-    <div class="setup">
-      <div class="field"><label>Seed</label><input id="seed-input" placeholder="random" /></div>
-      <div class="field"><label>Difficulty</label>
-        <select id="diff-input">
-          <option value="novice">Novice — 5 sequences to open</option>
-          <option value="adept" selected>Adept — 6 to open, the one to play</option>
-          <option value="immortal">Merciless — 8 sequences to open</option>
-        </select>
-      </div>
+    <div class="lockup">
+      <div class="spade">&#9824;</div>
+      <h1>Ascendant</h1>
+      <p class="sub">Spider solitaire, played as a run</p>
     </div>
-    <div class="row-2">
-      <button class="big" id="btn-begin">Start a run</button>
-      <button id="btn-daily">${playedToday(webStore) ? "Today again" : "Today's board"}</button>
+    <p class="lead">Clear the whole board to rank up. The next rank deals one more sequence
+    than the last, and all of it has to go. Boons are how you keep up.</p>
+    <div class="setup">
+      <label class="field"><span>Seed</span><input id="seed-input" placeholder="random" /></label>
+      <label class="field"><span>Difficulty</span>
+        <select id="diff-input">
+          <option value="novice">Novice — 5 to open</option>
+          <option value="adept" selected>Adept — 6 to open</option>
+          <option value="immortal">Merciless — 8 to open</option>
+        </select>
+      </label>
+    </div>
+    <button class="big" id="btn-begin">Start a run</button>
+    <div id="resume-wrap"></div>
+    <div class="minor">
+      <button id="btn-daily">${playedToday(webStore) ? 'Today again' : "Today's board"}</button>
       <button id="btn-records">Records</button>
     </div>
-    ${dailyLine()}
-    <div id="resume-wrap"></div>
+    ${dailyLine(best)}
     ${rulesHtml()}`;
   overlay(p);
   // Only offer to resume a save the current rules can actually honour; an
@@ -1287,13 +1313,14 @@ function titleScreen() {
 function breakthroughScreen() {
   const s = game.state;
   const next = RANKS[s.rank];
-  const p = el('div', 'panel');
-  p.appendChild(el('div', 'mark-big', RANKS[s.rank - 1].mark));
-  p.appendChild(el('h1', '', 'RANK UP'));
-  p.appendChild(el('p', 'lead',
-    `${RANKS[s.rank - 1].name} done. <b style="color:var(--gold)">${next.name}</b> next: `
-    + `<b style="color:var(--gold)">${game.rankConfig(s.rank + 1).required} sequences</b>.`));
-  p.appendChild(el('p', '', 'Pick one, for the rest of the run.'));
+  const p = el('div', 'panel plate wide');
+  p.insertAdjacentHTML('beforeend', `<div class="lockup">
+    <div class="spade">${RANKS[s.rank - 1].mark}</div>
+    <h1>Rank up</h1>
+    <p class="sub">${RANKS[s.rank - 1].name} cleared &middot; ${next.name} next
+      &middot; ${game.rankConfig(s.rank + 1).required} sequences</p>
+  </div>`);
+  p.appendChild(el('p', 'lead', 'Pick one. You keep it for the rest of the run.'));
   const offer = el('div', 'offer');
   s.offer.forEach((boon, i) => {
     const b = el('div', 'boon');
@@ -1324,19 +1351,21 @@ function endScreen(won) {
   const result = fileRun(won);
   playSound(won ? 'seal' : 'over');
 
-  const p = el('div', 'panel');
-  p.appendChild(el('div', 'mark-big', won ? TRANSCENDENCE.mark : '✧'));
-  p.appendChild(el('h1', '', won ? 'IMMORTALITY' : 'RUN OVER'));
+  const p = el('div', 'panel plate end');
+  p.insertAdjacentHTML('beforeend', `<div class="lockup">
+    <div class="spade">&#9824;</div>
+    <h1>${won ? 'Immortality' : 'Run over'}</h1>
+    <p class="sub">${won ? 'Six ranks, every rune' : `Stopped at ${RANKS[s.rank - 1].name}`}</p>
+  </div>`);
   p.appendChild(el('p', 'lead', won
     ? 'All six ranks. Turns out you were meant for it.'
-    : `You made it to <b style="color:var(--gold)">${RANKS[s.rank - 1].name}</b>. `
-      + "That's decent — but not everyone's meant for immortality."));
+    : "That's decent — but not everyone's meant for immortality."));
 
-  const tally = el('div', 'tally');
+  const tally = el('div', 'tally standings');
   const stat = (n, k) => {
     const d = el('div');
-    d.appendChild(el('div', 'n', String(n)));
-    d.appendChild(el('div', 'k', k));
+    d.appendChild(el('b', '', String(n)));
+    d.appendChild(el('span', '', k));
     return d;
   };
   tally.appendChild(stat(RANKS[s.rank - 1].name, 'Got to'));
@@ -1386,19 +1415,17 @@ function endScreen(won) {
   }
 
   const again = el('button', 'big', 'Go again');
-  again.style.marginRight = '10px';
   again.onclick = leave(() => start(randomSeed(), game.difficulty));
+  p.appendChild(again);
+
+  const row = el('div', 'minor');
   const retry = el('button', '', 'Same seed');
   retry.onclick = leave(() => start(game.seed, game.difficulty));
   const menu = el('button', '', 'Main menu');
-  menu.style.marginLeft = '10px';
   menu.onclick = leave(titleScreen);
-  const row = el('div');
-  row.style.marginTop = '10px';
-  row.append(again, retry, menu);
+  row.append(retry, menu);
   if (card && isNarrow()) {
     const copy = el('button', '', 'Copy');
-    copy.style.marginLeft = '10px';
     copy.onclick = () => copyResult(card, p.querySelector('.pips'));
     row.appendChild(copy);
   }

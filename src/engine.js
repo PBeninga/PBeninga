@@ -17,7 +17,7 @@ export const RANKS = [
   { name: 'Radiant', mark: 'V' },
   { name: 'Sovereign', mark: 'VI' },
 ];
-export const TRANSCENDENCE = { name: 'Transcendence', mark: '✧' };
+export const TRANSCENDENCE = { name: 'Transcendence', mark: '♠' };
 
 // A rank is a whole game of solitaire: you must clear the entire tableau, not
 // just a quota of it. `startSets` is how many A-K sequences the first rank

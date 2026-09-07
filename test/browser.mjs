@@ -1242,7 +1242,7 @@ for (const view of VIEWS) {
     if (after.daily.streak !== 1) throw new Error('the streak did not start');
     if (after.runs.length !== 1) throw new Error('the run was not recorded');
     if (!after.runs[0].daily) throw new Error('the run was not marked as the daily');
-    if (!/[🟨🟦⬜]/.test(after.pips)) throw new Error('no share card shown: "' + after.pips + '"');
+    if (!/[█▓░]/.test(after.pips)) throw new Error('no share card shown: "' + after.pips + '"');
   });
 
   await check('a replayed daily does not overwrite what you got', async () => {
@@ -1269,10 +1269,11 @@ for (const view of VIEWS) {
       rows: document.querySelectorAll('table.records tr').length,
     }));
     if (!/Records/i.test(seen.text)) throw new Error('no record screen');
-    if (!/Daily streak/i.test(seen.text)) throw new Error('the streak is not shown');
+    if (!/Streak/i.test(seen.text)) throw new Error('the streak is not shown');
     if (seen.rows < 2) throw new Error('no runs listed');
     await overlayFits('the record screen');
-    await page.evaluate(() => document.querySelector('#overlay .big').click());
+    await page.evaluate(() => [...document.querySelectorAll('#overlay button')]
+      .find((b) => /back/i.test(b.textContent)).click());
     await page.waitForTimeout(150);
   });
 

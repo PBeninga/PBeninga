@@ -98,10 +98,10 @@ test('the share card shows how far you got and nothing about the board', () => {
   const lost = shareText(run({ daily: '2026-09-06', rank: 3, rankName: 'Silver', runes: 12, score: 1400 }));
   assert.match(lost, /Ascendant — Daily Sep 6/);
   assert.match(lost, /Silver · 12 runes · 1400/);
-  assert.equal(lost.split('\n')[1], '🟨🟨🟦⬜⬜⬜', 'two ranks cleared, stopped on the third');
+  assert.equal(lost.split('\n')[1], '██▓░░░', 'two ranks cleared, stopped on the third');
 
   const won = shareText(run({ daily: '2026-09-06', rank: 6, won: true, runes: 41, score: 7850 }));
-  assert.equal(won.split('\n')[1], '🟨🟨🟨🟨🟨🟨');
+  assert.equal(won.split('\n')[1], '██████');
   assert.match(won, /Immortal · 41 runes/);
 
   const seedless = shareText(run({ rank: 1, rankName: 'Ember' }));
