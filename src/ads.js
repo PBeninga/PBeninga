@@ -20,8 +20,8 @@ export const LOSSES_PER_BREAK = 3;
 export const BREAK_COOLDOWN_MS = 90_000;
 
 export const REWARDS = {
-  reprieve: { key: 'reprieve', label: 'Second wind', blurb: 'A wildcard and an undo.' },
-  undo: { key: 'undo', label: 'One more undo', blurb: 'Take back one more move this rank.' },
+  reprieve: { key: 'reprieve', label: 'Second wind', blurb: '+1 wildcard, +1 undo' },
+  undo: { key: 'undo', label: 'Extra undo', blurb: 'One more undo this rank' },
 };
 
 const PREMIUM_KEY = 'ascendant.premium.v1';

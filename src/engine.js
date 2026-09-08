@@ -126,7 +126,7 @@ export class Game {
     s.phase = 'play';
     s.offer = [];
     this.undoStack = [];
-    this.log(`${RANKS[rank - 1].name} — ${cfg.required} rune${cfg.required > 1 ? 's' : ''} to clear.`);
+    this.log(`${RANKS[rank - 1].name}. ${cfg.required} rune${cfg.required > 1 ? 's' : ''}.`);
     this.settle();
   }
 
@@ -257,7 +257,7 @@ export class Game {
       s.columns[i].push(card);
     }
     s.moves++;
-    this.log('Another row down.');
+    this.log('Dealt a row.');
     this.settle();
     return true;
   }
@@ -395,11 +395,11 @@ export class Game {
     s.moves++;
     const label = RANK_LABEL[plan.value.rank];
     this.log({
-      stock: `Wildcard becomes ${label} — one taken out of the stock.`,
-      hidden: `Wildcard becomes ${label} — a face-down one goes.`,
-      faceup: `Wildcard becomes ${label} — one comes off the board.`,
-      reserve: `Wildcard becomes ${label} — taken out of the reserve.`,
-      free: `Wildcard becomes ${label} — none left to take, so free.`,
+      stock: `Wildcard set to ${label}. Removed one ${label} from the stock.`,
+      hidden: `Wildcard set to ${label}. Removed one face-down ${label}.`,
+      faceup: `Wildcard set to ${label}. Removed one ${label} from the board.`,
+      reserve: `Wildcard set to ${label}. Removed the ${label} from the reserve.`,
+      free: `Wildcard set to ${label}. No ${label} left to remove.`,
     }[plan.cost]);
     this.settle();
     return { cost: plan.cost, removed, value: plan.value };
@@ -432,7 +432,7 @@ export class Game {
           s.runes++;
           s.totalRunes++;
           s.collected.push({ suit: done.suit || 'wild', rank: s.rank });
-          this.log(`Rune bound (${s.runes}/${s.required}).`);
+          this.log(`Rune ${s.runes} of ${s.required}.`);
           changed = true;
         }
       }
@@ -441,7 +441,7 @@ export class Game {
     if (s.runes >= s.required) {
       if (s.rank >= RANKS.length) {
         s.phase = 'ascended';
-        this.log('Immortality suits you.');
+        this.log('Sovereign cleared. Run complete.');
       } else {
         s.phase = 'breakthrough';
         s.offer = offerBoons(s.boons);
@@ -451,7 +451,7 @@ export class Game {
     }
     if (!this.hasLegalMove()) {
       s.phase = 'failed';
-      this.log('Nothing left to play.');
+      this.log('No moves left.');
     }
   }
 
@@ -497,7 +497,7 @@ export class Game {
     s.wilds++;
     s.undosLeft++;
     this.undoStack = [];
-    this.log('Second wind: a wildcard and an undo.');
+    this.log('Second wind. +1 wildcard, +1 undo.');
     return true;
   }
 
@@ -510,14 +510,14 @@ export class Game {
     if (!this.canGrantUndo()) return false;
     this.state.extraUndos++;
     this.state.undosLeft++;
-    this.log('One more undo.');
+    this.log('+1 undo.');
     return true;
   }
 
   concede() {
     if (this.state.phase === 'play') {
       this.state.phase = 'failed';
-      this.log('You call it there.');
+      this.log('Run abandoned.');
     }
   }
 

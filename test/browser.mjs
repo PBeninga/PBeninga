@@ -358,7 +358,7 @@ for (const view of VIEWS) {
       destMarked: document.querySelectorAll('.col.hint-dest').length,
       armed: document.querySelector('#btn-hint').classList.contains('armed'),
     }));
-    if (first.text !== `Showing hint 1/${total}`) throw new Error('status read "' + first.text + '"');
+    if (first.text !== `Hint 1/${total}`) throw new Error('status read "' + first.text + '"');
     if (!first.ghosts) throw new Error('no ghost cards drawn');
     if (!first.srcMarked || !first.destMarked) throw new Error('source or destination not highlighted');
     if (!first.armed) throw new Error('the hint button should read as active');
@@ -377,7 +377,7 @@ for (const view of VIEWS) {
 
     await page.waitForTimeout(800);
     const second = await page.evaluate(() => document.querySelector('#status').textContent);
-    if (second !== `Showing hint 2/${total}`) throw new Error('did not advance, read "' + second + '"');
+    if (second !== `Hint 2/${total}`) throw new Error('did not advance, read "' + second + '"');
     await hintOff(page);
     await unstash(page);
   });
@@ -841,7 +841,7 @@ for (const view of VIEWS) {
       armed: document.querySelector('#btn-hint').classList.contains('armed'),
     }));
     if (after.layers || after.marks) throw new Error('hint artwork survived the click');
-    if (after.armed || after.status.startsWith('Showing hint')) throw new Error('hint state survived the click');
+    if (after.armed || /^Hint \d/.test(after.status)) throw new Error('hint state survived the click');
   });
 
   await check('undo sits in the dock and steps back', async () => {
@@ -1192,7 +1192,7 @@ for (const view of VIEWS) {
     if (!after.bought) throw new Error('the purchase never reached the host');
     if (!after.premium) throw new Error('the purchase did not stick');
     if (after.buttons) throw new Error('still selling after it was bought');
-    if (!/ad-free/i.test(after.text)) throw new Error('no thanks shown to a paying player');
+    if (!/ads removed/i.test(after.text)) throw new Error('no thanks shown to a paying player');
   });
 
   await check('a paying player is never interrupted between runs', async () => {

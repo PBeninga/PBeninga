@@ -382,7 +382,7 @@ function renderDock() {
   if (hint) {
     status.appendChild(el('span', 'hint-count', hintStatusText()));
   } else if (game.isStagnant()) {
-    status.appendChild(el('span', 'warn', '⚠ Nothing left to play — undo, or call it.'));
+    status.appendChild(el('span', 'warn', 'No moves left. Undo, or end the run.'));
   } else if (s.log[0]) {
     status.appendChild(el('span', '', s.log[0]));
   }
@@ -612,13 +612,13 @@ function spendWild(index) {
   playSound('move');
   buzz(8);
   const rank = RANK_LABEL[result.value.rank];
-  toast(`${rank} ${{
-    stock: 'taken from the stock',
-    hidden: 'burned out of a face-down pile',
-    faceup: 'swallowed off the board',
-    reserve: 'drawn out of the reserve',
-    free: 'conjured — nothing left to pay with',
-  }[result.cost]}`);
+  toast({
+    stock: `Wildcard set to ${rank}. One removed from the stock`,
+    hidden: `Wildcard set to ${rank}. One face-down removed`,
+    faceup: `Wildcard set to ${rank}. One removed from the board`,
+    reserve: `Wildcard set to ${rank}. Removed from the reserve`,
+    free: `Wildcard set to ${rank}`,
+  }[result.cost]);
   afterAction(game.state.lastSealed || []);
   return true;
 }
@@ -761,13 +761,13 @@ function nudge(node) {
  */
 function hintStatusText() {
   if (!hint) return '';
-  if (hint.kind === 'deal') return 'No moves left — deal another row';
-  if (hint.kind === 'wild') return 'Only a wildcard left — drop one on a lit column';
-  if (hint.kind === 'over') return 'Nothing left to play';
-  const what = hint.kind === 'empty' ? 'Only empty-column moves'
-    : hint.kind === 'park' ? 'Only a reserve slot left'
-      : hint.kind === 'split' ? 'Only breaking a run leads anywhere'
-        : 'Showing hint';
+  if (hint.kind === 'deal') return 'No moves. Deal another row.';
+  if (hint.kind === 'wild') return 'Wildcard: drop on a lit column';
+  if (hint.kind === 'over') return 'No moves left';
+  const what = hint.kind === 'empty' ? 'Empty column'
+    : hint.kind === 'park' ? 'Reserve'
+      : hint.kind === 'split' ? 'Break a run'
+        : 'Hint';
   return `${what} ${hint.index + 1}/${hint.moves.length}`;
 }
 
@@ -1050,31 +1050,31 @@ function rulesHtml() {
     <div class="rules">
       <h3>The board</h3>
       <ul>
-        <li>Build <b>down by rank</b>; suit does not matter.</li>
+        <li>Build <b>down by rank</b>. Suit does not matter.</li>
         <li>Cards you cannot lift are <b>dimmed</b>.</li>
         <li>Lift a group only if it is a <b>descending run</b>.</li>
-        <li><b>Tap a card</b> and it flies to wherever it builds the longest run. Drag it if you
-        want somewhere else.</li>
+        <li><b>Tap a card</b> to send it where it builds the longest run. Drag to choose the
+        column yourself.</li>
         <li>An empty column takes anything. The stock deals to every column, empty ones included.</li>
       </ul>
       <h3>Ranking up</h3>
       <ul>
-        <li>A complete <b>K→A run</b> is a <b>rune</b>. It binds itself and drops into the core.</li>
-        <li>A rank ends when the <b>whole board</b> is gone. Then you <b>rank up</b>, pick a boon,
-        and start fresh.</li>
-        <li>Every rank deals <b>one more sequence than the last</b>. That is what the boons are for.</li>
-        <li>Three undos per rank. The run ends only when nothing leads anywhere — splits, reserve
-        slots and wildcards included. If a line exists, the hint finds it.</li>
+        <li>A complete <b>K→A run</b> is a <b>rune</b>. It leaves the board on its own.</li>
+        <li>Clear the <b>whole board</b> to finish the rank. Pick a boon, and a new board is
+        dealt.</li>
+        <li>Each rank adds <b>one sequence</b> to the deck.</li>
+        <li>Three undos per rank. The run ends when no move, deal, reserve slot or wildcard can
+        lead anywhere.</li>
       </ul>
       <h3>Boons &amp; keys</h3>
       <ul>
-        <li><b>Wildcards</b> (✦) are held, not dealt. Drop one on a column and it becomes the card
-        that belongs there — one below what it lands on, or a King in an empty column. Nothing
-        goes below an Ace.</li>
-        <li>It then <b>deletes</b> a copy of whatever it mimics, so the board stays clearable.</li>
-        <li>A <b>reserve slot</b> holds one card off the board. Tap it to send it back.</li>
+        <li><b>Wildcards</b> (✦) are held in hand. Drop one on a column and it takes the value
+        that fits: one below the card it lands on, or a King in an empty column. It cannot be
+        played on an Ace.</li>
+        <li>A matching card is <b>removed</b> from the game, so the deck stays complete.</li>
+        <li>A <b>reserve slot</b> holds one card. Tap the slot to return it.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
-        <li>Stuck? <b>Hint</b> walks every move, best first. Anything you do stops it.</li>
+        <li><b>Hint</b> cycles through the available moves, best first.</li>
       </ul>
     </div>
   </details>`;
@@ -1088,7 +1088,7 @@ function supportRow() {
   if (!adsReady()) return null;
   const box = el('div', 'support');
   if (adsPremium()) {
-    box.appendChild(el('p', 'fine', 'Ad-free — thanks.'));
+    box.appendChild(el('p', 'fine', 'Ads removed.'));
     return box;
   }
   const buy = el('button', '', 'Remove ads');
@@ -1096,7 +1096,7 @@ function supportRow() {
     buy.disabled = true;
     const ok = await buyPremium();
     buy.disabled = false;
-    toast(ok ? 'Ad-free — thanks' : 'Purchase not completed');
+    toast(ok ? 'Ads removed' : 'Purchase not completed');
     if (ok) pauseScreen();
   };
   const restore = el('button', 'quiet', 'Restore');
@@ -1107,7 +1107,7 @@ function supportRow() {
     if (ok) pauseScreen();
   };
   box.append(buy, restore);
-  box.appendChild(el('p', 'fine', 'One payment, no more breaks between runs.'));
+  box.appendChild(el('p', 'fine', 'One purchase. Removes the ads between runs.'));
   return box;
 }
 
@@ -1132,7 +1132,7 @@ async function copyResult(text, node) {
       sel.addRange(range);
     } catch (__) { /* nothing more to try */ }
   }
-  toast(ok ? 'Copied' : 'Select and copy');
+  toast(ok ? 'Copied' : 'Clipboard blocked. Select the text.');
 }
 
 function shareBlock(text) {
@@ -1154,12 +1154,11 @@ function recordsScreen() {
   p.insertAdjacentHTML('beforeend', `<div class="lockup">
     <div class="spade">&#9824;</div>
     <h1>Records</h1>
-    <p class="sub">${runs.length ? `${sum.played} run${sum.played === 1 ? '' : 's'} kept`
-    : 'Nothing kept yet'}</p>
+    <p class="sub">${runs.length ? `${sum.played} run${sum.played === 1 ? '' : 's'}` : 'No runs yet'}</p>
   </div>`);
 
   if (!runs.length) {
-    p.appendChild(el('p', 'lead', 'Finish a run and it lands here.'));
+    p.appendChild(el('p', 'lead', 'Finished runs are listed here.'));
   } else {
     const tally = el('div', 'tally standings');
     const stat = (n, k) => {
@@ -1212,12 +1211,12 @@ function pauseScreen() {
   p.insertAdjacentHTML('beforeend', `<div class="lockup">
     <div class="spade">${RANKS[s.rank - 1].mark}</div>
     <h1>Paused</h1>
-    <p class="sub">${RANKS[s.rank - 1].name} &middot; ${s.runes}/${s.required} bound
+    <p class="sub">${RANKS[s.rank - 1].name} &middot; ${s.runes}/${s.required} runes
       &middot; ${DIFFICULTIES[game.difficulty].name}</p>
   </div>`);
   p.appendChild(el('p', 'lead', held.length
     ? 'Held: ' + held.map((u) => `${u.sigil} ${u.name} ×${u.count}`).join(' · ')
-    : 'No boons yet — clear a board to earn one.'));
+    : 'No boons yet.'));
 
   const resume = el('button', 'big', 'Resume');
   resume.onclick = () => { closeOverlay(); render(); };
@@ -1226,7 +1225,7 @@ function pauseScreen() {
   const row = el('div', 'minor');
   const audio = el('button', '', soundOn() ? 'Sound on' : 'Sound off');
   audio.onclick = () => { setSoundOn(!soundOn()); playSound('move'); pauseScreen(); };
-  const quit = el('button', '', 'Quit this run');
+  const quit = el('button', '', 'Abandon run');
   quit.onclick = () => { titleScreen(); };
   row.append(audio, quit);
   p.appendChild(row);
@@ -1262,10 +1261,10 @@ function titleScreen() {
     <div class="lockup">
       <div class="spade">&#9824;</div>
       <h1>Ascendant</h1>
-      <p class="sub">Spider solitaire, played as a run</p>
+      <p class="sub">Spider solitaire &middot; six ranks</p>
     </div>
-    <p class="lead">Clear the whole board to rank up. The next rank deals one more sequence
-    than the last, and all of it has to go. Boons are how you keep up.</p>
+    <p class="lead">Clear the board to reach the next rank. Each rank adds one sequence to
+    the deck. Boons carry over.</p>
     <div class="setup">
       <label class="field"><span>Seed</span><input id="seed-input" placeholder="random" /></label>
       <label class="field"><span>Difficulty</span>
@@ -1291,7 +1290,7 @@ function titleScreen() {
   if (restored) {
     const wrap = $('#resume-wrap');
     const b = el('button', '', `Resume — ${RANKS[restored.state.rank - 1].name}, `
-      + `${restored.state.runes}/${restored.state.required} bound`);
+      + `${restored.state.runes}/${restored.state.required} runes`);
     b.style.marginTop = '12px';
     b.onclick = () => {
       game = restored;
@@ -1320,7 +1319,7 @@ function breakthroughScreen() {
     <p class="sub">${RANKS[s.rank - 1].name} cleared &middot; ${next.name} next
       &middot; ${game.rankConfig(s.rank + 1).required} sequences</p>
   </div>`);
-  p.appendChild(el('p', 'lead', 'Pick one. You keep it for the rest of the run.'));
+  p.appendChild(el('p', 'lead', 'Choose a boon.'));
   const offer = el('div', 'offer');
   s.offer.forEach((boon, i) => {
     const b = el('div', 'boon');
@@ -1355,7 +1354,7 @@ function endScreen(won) {
   p.insertAdjacentHTML('beforeend', `<div class="lockup">
     <div class="spade">&#9824;</div>
     <h1>${won ? 'Immortality' : 'Run over'}</h1>
-    <p class="sub">${won ? 'Six ranks, every rune' : `Stopped at ${RANKS[s.rank - 1].name}`}</p>
+    <p class="sub">${won ? 'All six ranks' : `Rank ${s.rank} &middot; ${RANKS[s.rank - 1].name}`}</p>
   </div>`);
   p.appendChild(el('p', 'lead', won
     ? 'All six ranks. Turns out you were meant for it.'
@@ -1379,7 +1378,7 @@ function endScreen(won) {
     p.appendChild(el('p', '', 'Boons held: '
       + held.map((u) => `${u.name} ×${u.count}`).join(' · ')));
   }
-  if (beaten && score > 0) p.appendChild(el('p', 'fine', 'A personal best.'));
+  if (beaten && score > 0) p.appendChild(el('p', 'fine', 'New best.'));
   p.appendChild(el('p', '', dailyRun
     ? `Daily <b style="color:var(--gold)">${dayLabel(dailyRun)}</b> · ${DIFFICULTIES[game.difficulty].name}`
     : `Seed <b style="color:var(--gold)">${game.seed}</b> · ${DIFFICULTIES[game.difficulty].name}`));
@@ -1399,13 +1398,13 @@ function endScreen(won) {
     wind.onclick = async () => {
       wind.disabled = true;
       const earned = await playReward('reprieve');
-      if (!earned) { wind.disabled = false; toast('Nothing earned'); return; }
+      if (!earned) { wind.disabled = false; toast('No reward'); return; }
       game.reprieve();
       shownPhase = 'play';
       closeOverlay();
       render();
       save();
-      toast('A wildcard and an undo');
+      toast('+1 wildcard, +1 undo');
     };
     const windRow = el('div');
     windRow.style.margin = '14px 0 2px';
@@ -1414,12 +1413,12 @@ function endScreen(won) {
     p.appendChild(el('p', 'fine', REWARDS.reprieve.blurb));
   }
 
-  const again = el('button', 'big', 'Go again');
+  const again = el('button', 'big', 'New run');
   again.onclick = leave(() => start(randomSeed(), game.difficulty));
   p.appendChild(again);
 
   const row = el('div', 'minor');
-  const retry = el('button', '', 'Same seed');
+  const retry = el('button', '', 'Replay seed');
   retry.onclick = leave(() => start(game.seed, game.difficulty));
   const menu = el('button', '', 'Main menu');
   menu.onclick = leave(titleScreen);
@@ -1535,7 +1534,7 @@ function bindChrome() {
     if (!game) return;
     if (game.state.undosLeft <= 0) {
       if (!game.undoStack.length || !game.canGrantUndo() || !canReward('undo')) return;
-      if (!(await playReward('undo'))) { toast('No undo earned'); return; }
+      if (!(await playReward('undo'))) { toast('No reward'); return; }
       game.grantUndo();
     }
     if (game.undo()) { playSound('lift'); afterAction(); }

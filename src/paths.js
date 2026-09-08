@@ -7,16 +7,15 @@ export const UPGRADES = [
     name: 'Wildcard',
     sigil: '✦',
     each: '+2 wildcards in hand',
-    desc: 'Two more each rank. Becomes the card that belongs where it lands, '
-      + 'and deletes a copy of whatever it mimics.',
+    desc: 'Drop it on any column. It takes the value that fits there, and a '
+      + 'matching card is removed from the game.',
   },
   {
     key: 'cell',
     name: 'Reserve Slot',
     sigil: '❖',
     each: '+1 reserve slot',
-    desc: 'One more slot. Each holds a card off the board for as long as you '
-      + 'need it there.',
+    desc: 'Holds one card off the board.',
   },
 ];
 
