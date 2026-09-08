@@ -382,7 +382,7 @@ function renderDock() {
   if (hint) {
     status.appendChild(el('span', 'hint-count', hintStatusText()));
   } else if (game.isStagnant()) {
-    status.appendChild(el('span', 'warn', 'No moves left. Undo, or end the run.'));
+    status.appendChild(el('span', 'warn', 'No moves left: undo, or abandon the run'));
   } else if (s.log[0]) {
     status.appendChild(el('span', '', s.log[0]));
   }
@@ -761,7 +761,7 @@ function nudge(node) {
  */
 function hintStatusText() {
   if (!hint) return '';
-  if (hint.kind === 'deal') return 'No moves. Deal another row.';
+  if (hint.kind === 'deal') return 'Deal another row';
   if (hint.kind === 'wild') return 'Wildcard: drop on a lit column';
   if (hint.kind === 'over') return 'No moves left';
   const what = hint.kind === 'empty' ? 'Empty column'
@@ -1050,17 +1050,17 @@ function rulesHtml() {
     <div class="rules">
       <h3>The board</h3>
       <ul>
-        <li>Build <b>down by rank</b>. Suit does not matter.</li>
+        <li>Build <b>down by rank</b>, regardless of suit.</li>
         <li>Cards you cannot lift are <b>dimmed</b>.</li>
         <li>Lift a group only if it is a <b>descending run</b>.</li>
-        <li><b>Tap a card</b> to send it where it builds the longest run. Drag to choose the
-        column yourself.</li>
+        <li><b>Tap a card</b> to send it where it builds the longest run, or drag it to a column
+        of your choosing.</li>
         <li>An empty column takes anything. The stock deals to every column, empty ones included.</li>
       </ul>
       <h3>Ranking up</h3>
       <ul>
-        <li>A complete <b>K→A run</b> is a <b>rune</b>. It leaves the board on its own.</li>
-        <li>Clear the <b>whole board</b> to finish the rank. Pick a boon, and a new board is
+        <li>A complete <b>K→A run</b> is a <b>rune</b> and leaves the board on its own.</li>
+        <li>Clear the <b>whole board</b> to finish the rank, pick a boon, and a new board is
         dealt.</li>
         <li>Each rank adds <b>one sequence</b> to the deck.</li>
         <li>Three undos per rank. The run ends when no move, deal, reserve slot or wildcard can
@@ -1069,10 +1069,10 @@ function rulesHtml() {
       <h3>Boons &amp; keys</h3>
       <ul>
         <li><b>Wildcards</b> (✦) are held in hand. Drop one on a column and it takes the value
-        that fits: one below the card it lands on, or a King in an empty column. It cannot be
-        played on an Ace.</li>
+        that fits: one below the card it lands on, a King in an empty column, and never on
+        an Ace.</li>
         <li>A matching card is <b>removed</b> from the game, so the deck stays complete.</li>
-        <li>A <b>reserve slot</b> holds one card. Tap the slot to return it.</li>
+        <li>A <b>reserve slot</b> holds one card off the board until you tap the slot to return it.</li>
         <li><b>Space</b> deals · <b>U</b> or <b>Ctrl/⌘+Z</b> undoes · <b>H</b> shows hints · <b>Esc</b> stops them.</li>
         <li><b>Hint</b> cycles through the available moves, best first.</li>
       </ul>
@@ -1107,7 +1107,7 @@ function supportRow() {
     if (ok) pauseScreen();
   };
   box.append(buy, restore);
-  box.appendChild(el('p', 'fine', 'One purchase. Removes the ads between runs.'));
+  box.appendChild(el('p', 'fine', 'One purchase removes the ads between runs.'));
   return box;
 }
 
@@ -1132,7 +1132,7 @@ async function copyResult(text, node) {
       sel.addRange(range);
     } catch (__) { /* nothing more to try */ }
   }
-  toast(ok ? 'Copied' : 'Clipboard blocked. Select the text.');
+  toast(ok ? 'Copied' : 'Select the text to copy it');
 }
 
 function shareBlock(text) {
@@ -1263,8 +1263,8 @@ function titleScreen() {
       <h1>Ascendant</h1>
       <p class="sub">Spider solitaire &middot; six ranks</p>
     </div>
-    <p class="lead">Clear the board to reach the next rank. Each rank adds one sequence to
-    the deck. Boons carry over.</p>
+    <p class="lead">Clear the board to reach the next rank. Each rank adds one more sequence
+    to the deck, and the boons you pick along the way carry over.</p>
     <div class="setup">
       <label class="field"><span>Seed</span><input id="seed-input" placeholder="random" /></label>
       <label class="field"><span>Difficulty</span>

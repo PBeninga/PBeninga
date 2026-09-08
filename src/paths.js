@@ -7,7 +7,7 @@ export const UPGRADES = [
     name: 'Wildcard',
     sigil: '✦',
     each: '+2 wildcards in hand',
-    desc: 'Drop it on any column. It takes the value that fits there, and a '
+    desc: 'Drop it on any column; it takes the value that fits there, and a '
       + 'matching card is removed from the game.',
   },
   {

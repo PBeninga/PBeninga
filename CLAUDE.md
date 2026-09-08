@@ -43,3 +43,9 @@ slightly occult. Think letterpress and coal, not SaaS.
 - Hero + three-column feature cards layout
 - "Delightful" microcopy ("Oops!", "You're all set! 🎉")
 - Rounded-square icon chips with pastel backgrounds
+
+### Copy
+- No short tag sentence closing a paragraph ("Boons are how you keep up.").
+  Fold the fact into the sentence before it, or cut it.
+- The log records events ("Dealt a row."); it does not narrate or comment.
+- Buttons and the hint bar are labels, not sentences.
