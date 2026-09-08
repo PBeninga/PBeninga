@@ -441,7 +441,7 @@ export class Game {
     if (s.runes >= s.required) {
       if (s.rank >= RANKS.length) {
         s.phase = 'ascended';
-        this.log('Run complete: all six ranks cleared.');
+        this.log('Run complete.');
       } else {
         s.phase = 'breakthrough';
         s.offer = offerBoons(s.boons);

@@ -45,7 +45,12 @@ slightly occult. Think letterpress and coal, not SaaS.
 - Rounded-square icon chips with pastel backgrounds
 
 ### Copy
-- No short tag sentence closing a paragraph ("Boons are how you keep up.").
-  Fold the fact into the sentence before it, or cut it.
+- Every sentence must tell the player something they do not already have.
+  If it restates, elaborates, or can be seen from the interface, delete it.
+  Do not merge it into the sentence before: redundant information is still
+  redundant when merged. "Build down by rank." is complete; "Build down by
+  rank, regardless of suit." is not better, it is longer.
+- Before shipping a string, remove its last sentence and check whether
+  anything is lost. Usually nothing is.
 - The log records events ("Dealt a row."); it does not narrate or comment.
 - Buttons and the hint bar are labels, not sentences.
