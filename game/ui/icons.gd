@@ -25,8 +25,7 @@ func _ready() -> void:
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	cam.size = 1.25
-	cam.position = Vector3(0, 0.35, 3)
-	cam.look_at(Vector3.ZERO)
+	cam.transform = Transform3D(Basis(), Vector3(0, 0.35, 3)).looking_at(Vector3.ZERO)
 	_vp.add_child(cam)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-40, -30, 0)

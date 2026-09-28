@@ -226,14 +226,6 @@ func _build_settings() -> Control:
 		ui.save_settings())
 	rate.text = "XP rate: %s" % ("Brisk x3" if world.xp_rate > 1.0 else "Standard")
 	v.add_child(rate)
-	var snd := UIKit.button("", func(): pass)
-	snd.pressed.connect(func():
-		ui.settings.sound = not ui.settings.get("sound", true)
-		ui.sfx.enabled = ui.settings.sound
-		snd.text = "Sound: %s" % ("On" if ui.settings.sound else "Off")
-		ui.save_settings())
-	snd.text = "Sound: %s" % ("On" if ui.settings.get("sound", true) else "Off")
-	v.add_child(snd)
 	var run := UIKit.button("", func(): pass)
 	run.pressed.connect(func():
 		world.player.run = not world.player.run

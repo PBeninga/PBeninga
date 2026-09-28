@@ -197,7 +197,6 @@ func take_perk(perk_id: String) -> bool:
 		return false
 	player.perks[perk_id] = true
 	log_line("Perk taken: %s." % Defs.perk_def(perk_id).name)
-	emit({"type": "sound", "name": "perk"})
 	return true
 
 func stats() -> Dictionary:
@@ -487,7 +486,6 @@ func _mob_died(m: Mob) -> void:
 	if rng.randf() < float(d.shard):
 		give_reagent(1)
 		log_line("%s dropped a %s." % [d.name, Defs.REAGENT_NAME])
-		emit({"type": "sound", "name": "drop"})
 
 func _mob_act(m: Mob) -> void:
 	var d: Dictionary = Defs.MOBS[m.kind]
@@ -936,7 +934,6 @@ func equip(item_uid: int) -> bool:
 		player.attack_cd = maxi(player.attack_cd, 1)
 	player.hp = mini(player.hp, max_hp())
 	emit({"type": "equip"})
-	emit({"type": "sound", "name": "equip"})
 	return true
 
 func unequip(slot: String) -> bool:
@@ -1039,7 +1036,6 @@ func craft(recipe_id: String, uids: Array) -> Dictionary:
 	add_to_pack(item)
 	log_line("Crafted %s." % Items.item_name(item))
 	emit({"type": "crafted", "item": item})
-	emit({"type": "sound", "name": "craft"})
 	return item
 
 func temper(item_uid: int, choice := -1) -> int:
@@ -1060,7 +1056,6 @@ func temper(item_uid: int, choice := -1) -> int:
 	var m: Dictionary = item.mods[idx]
 	log_line("%s rose to %s." % [Defs.MODS[m.id].name, Defs.TIER_NUMERALS[m.tier]])
 	emit({"type": "tempered", "uid": item_uid, "index": idx})
-	emit({"type": "sound", "name": "temper"})
 	return idx
 
 func salvage(item_uid: int) -> int:

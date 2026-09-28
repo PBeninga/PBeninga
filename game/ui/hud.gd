@@ -165,7 +165,7 @@ class TickStrip extends Control:
 			var d: int = tg.land - w.tick
 			strikes[d] = true
 		var s := w.stats()
-		var in_fight := w.player.action.get("type", "") == "attack" or w.warden.active
+		var in_fight = w.player.action.get("type", "") == "attack" or w.warden.active
 		var interval := Defs.echo_interval(s.echo)
 		for i in CELLS:
 			var x := 4.0 + i * cw
@@ -217,7 +217,7 @@ class BossBar extends Control:
 		draw_string(bf, Vector2(size.x - 10 - bf.get_string_size(ph, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x, 17), ph, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UIKit.ASH)
 		var bar := Rect2(10, 24, size.x - 20, 12)
 		draw_rect(bar, Color("2a0e0a"))
-		var t := float(m.hp) / m.max_hp
+		var t = float(m.hp) / m.max_hp
 		draw_rect(Rect2(bar.position, Vector2(bar.size.x * t, bar.size.y)), Color("b8342a"))
 		for th in [0.66, 0.33]:
 			var x: float = bar.position.x + bar.size.x * th

@@ -4,7 +4,7 @@ extends RefCounted
 ## plus the tooltip and the right-click menu.
 
 
-class Window extends PanelContainer:
+class Modal extends PanelContainer:
 	var ui
 	var body: VBoxContainer
 	var title_label: Label
@@ -41,7 +41,7 @@ class Window extends PanelContainer:
 
 # ================================================================ stash
 
-class StashWindow extends Window:
+class StashWindow extends Modal:
 	var stash_grid: GridContainer
 	var pack_grid: GridContainer
 	var filter := "all"
@@ -120,7 +120,7 @@ class StashWindow extends Window:
 
 # ================================================================ crafting
 
-class CraftWindow extends Window:
+class CraftWindow extends Modal:
 	var skill := "fletching"
 	var family := "log"
 	var recipe := ""
@@ -230,7 +230,7 @@ class CraftWindow extends Window:
 			if r_id == recipe:
 				b.add_theme_color_override("font_color", UIKit.EMBER)
 			recipe_box.add_child(b)
-			var slot_line := Defs.SLOT_NAMES[rec.slot]
+			var slot_line = Defs.SLOT_NAMES[rec.slot]
 			if rec.has("style"):
 				slot_line = "%s · %d ticks · range %d" % [Defs.SKILL_NAMES[rec.style], rec.speed, rec.range]
 			var l := UIKit.label(slot_line, 12, UIKit.DIM)
@@ -276,7 +276,7 @@ class CraftWindow extends Window:
 		var mods := []
 		for m in c.mods:
 			mods.append("%s %s" % [Defs.MODS[m.id].name, Defs.TIER_NUMERALS[m.tier]])
-		var letter := ItemText.LETTERS[idx] + "  " if idx >= 0 else "    "
+		var letter = ItemText.LETTERS[idx] + "  " if idx >= 0 else "    "
 		b.text = "%s%s  %s" % [letter, Defs.RARITIES[c.rarity], ", ".join(mods) if not mods.is_empty() else "-"]
 		b.add_theme_color_override("font_color", UIKit.rarity_color(c.rarity))
 		b.add_theme_font_size_override("font_size", 13)
@@ -311,7 +311,7 @@ class CraftWindow extends Window:
 		craft_btn.disabled = why != ""
 
 	func _craft() -> void:
-		var it := ui.world.craft(recipe, picked)
+		var it = ui.world.craft(recipe, picked)
 		if not it.is_empty():
 			ui.flush_log()
 			picked = ui.world.auto_pick(recipe, res)
@@ -320,7 +320,7 @@ class CraftWindow extends Window:
 
 # ================================================================ recap & victory
 
-class NoticeWindow extends Window:
+class NoticeWindow extends Modal:
 	func build(title: String, bb: String, button_text: String) -> void:
 		title_label.text = title
 		var r := UIKit.rich()
@@ -332,7 +332,7 @@ class NoticeWindow extends Window:
 		body.add_child(b)
 
 
-class ChoiceWindow extends Window:
+class ChoiceWindow extends Modal:
 	func build(title: String, options: Array, cb: Callable) -> void:
 		title_label.text = title
 		for o in options:

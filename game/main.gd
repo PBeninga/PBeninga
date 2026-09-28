@@ -118,6 +118,11 @@ func _load() -> void:
 	if d is Dictionary:
 		world.from_dict(d)
 
+func new_game() -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	shot["fresh"] = "1"
+	get_tree().reload_current_scene()
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		save()

@@ -40,7 +40,7 @@ static func _gear(item: Dictionary, world: World) -> String:
 	var perks: Dictionary = world.player.perks if world else {}
 	var s := Items.gear_stats(item, perks)
 	var lines := [title(item)]
-	var kind := Defs.SLOT_NAMES[item.slot]
+	var kind: String = Defs.SLOT_NAMES[item.slot]
 	if item.has("style"):
 		kind = "%s · %d ticks · range %d" % [Defs.SKILL_NAMES[item.style], item.speed, item.range]
 	lines.append(c(UIKit.ASH, "%s · quality %d" % [kind, item.quality]))

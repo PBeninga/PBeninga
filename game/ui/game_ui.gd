@@ -9,7 +9,6 @@ var main
 var world: World
 var view: WorldView
 var icons: Icons
-var sfx: Sfx
 var root: Control
 var side: SidePanel
 var minimap: Hud.Minimap
@@ -23,7 +22,7 @@ var menu: Windows.ContextMenu
 var window: Control
 var tick_progress := 0.0
 var use_item = null
-var settings := {"xp_rate": 1.0, "sound": true}
+var settings := {"xp_rate": 1.0}
 var _log_lines: Array = []
 var _hover_target := {}
 var _dirty := true
@@ -37,9 +36,6 @@ func setup(m) -> void:
 	icons = Icons.new()
 	add_child(icons)
 	icons.baked.connect(func(_k): _dirty = true)
-	sfx = Sfx.new()
-	sfx.enabled = settings.get("sound", true)
-	add_child(sfx)
 	root = Control.new()
 	root.theme = UIKit.theme()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -63,14 +59,12 @@ func setup(m) -> void:
 	minimap = Hud.Minimap.new()
 	minimap.ui = self
 	minimap.build(world.map)
-	minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	minimap.position = Vector2(-180, 8)
 	root.add_child(minimap)
+	place(minimap, Vector2(1, 0), Vector2(-180, 8), Vector2(172, 172))
 	var orbs := VBoxContainer.new()
 	orbs.add_theme_constant_override("separation", 4)
-	orbs.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	orbs.position = Vector2(-250, 8)
 	root.add_child(orbs)
+	place(orbs, Vector2(1, 0), Vector2(-250, 8), Vector2(62, 110))
 	for k in ["hp", "run", "shards"]:
 		var o := Hud.Orb.new()
 		o.ui = self
@@ -79,24 +73,20 @@ func setup(m) -> void:
 	# Boss bar, top centre.
 	boss_bar = Hud.BossBar.new()
 	boss_bar.ui = self
-	boss_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	boss_bar.position = Vector2(-220, 8)
 	boss_bar.visible = false
 	root.add_child(boss_bar)
+	place(boss_bar, Vector2(0.5, 0), Vector2(-220, 8), Vector2(440, 44))
 	# Side panel, bottom right.
 	side = SidePanel.new()
-	side.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	root.add_child(side)
 	side.setup(self)
-	side.position = Vector2(-258, -386)
+	place(side, Vector2(1, 1), Vector2(-258, -386), Vector2(250, 378))
 	# Chat, bottom left.
 	var chat_panel := PanelContainer.new()
 	chat_panel.add_theme_stylebox_override("panel", UIKit.box(Color(UIKit.BG, 0.86), UIKit.LINE, 1, 2, 8))
-	chat_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	chat_panel.position = Vector2(8, -164)
-	chat_panel.custom_minimum_size = Vector2(470, 156)
 	chat_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(chat_panel)
+	place(chat_panel, Vector2(0, 1), Vector2(8, -164), Vector2(470, 156))
 	chat = RichTextLabel.new()
 	chat.bbcode_enabled = true
 	chat.scroll_following = true
@@ -106,9 +96,8 @@ func setup(m) -> void:
 	# Tick strip beside the chat.
 	ticks = Hud.TickStrip.new()
 	ticks.ui = self
-	ticks.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	ticks.position = Vector2(488, -54)
 	root.add_child(ticks)
+	place(ticks, Vector2(0, 1), Vector2(488, -54), Vector2(296, 46))
 	tooltip = Windows.Tooltip.new()
 	root.add_child(tooltip)
 	menu = Windows.ContextMenu.new()
@@ -118,6 +107,17 @@ func setup(m) -> void:
 	if world.tick == 0:
 		_log("The forest lies west, the mine east across the bridge, the Warden's hollow south.", UIKit.ASH)
 	refresh_all()
+
+## Pin a control to an anchor point with a fixed offset and size.
+static func place(c: Control, anchor: Vector2, offset: Vector2, sz: Vector2) -> void:
+	c.anchor_left = anchor.x
+	c.anchor_right = anchor.x
+	c.anchor_top = anchor.y
+	c.anchor_bottom = anchor.y
+	c.offset_left = offset.x
+	c.offset_top = offset.y
+	c.offset_right = offset.x + sz.x
+	c.offset_bottom = offset.y + sz.y
 
 # ================================================================ refresh
 
@@ -168,49 +168,17 @@ func handle_event(e: Dictionary) -> void:
 	match e.type:
 		"hit":
 			overlay.add_splat(e.target, e.amount)
-			if e.target == -1 and e.amount > 0:
-				sfx.play("hurt")
-			elif e.amount > 0:
-				sfx.play("hit")
-			else:
-				sfx.play("miss")
 		"xp":
 			overlay.add_drop(e.skill, e.amount)
-		"level":
-			sfx.play("level")
-		"gathered":
-			sfx.play("gather")
-		"gather_swing":
-			sfx.play("chop" if e.family == "log" else "pick")
 		"station":
 			_open_station(e.kind)
-		"strike":
-			sfx.play("strike")
-		"telegraph":
-			sfx.play("mark")
 		"tell":
 			_log("Read the Tell: next attack certain.", UIKit.EMBER)
-		"sound":
-			sfx.play(e.name)
-		"attack":
-			if e.who == "player":
-				sfx.play("bow" if e.style == "archery" else "swing")
-		"death":
-			sfx.play("death")
 		"you_died":
-			sfx.play("died")
 			_show_recap(e)
 		"boss":
-			match e.event:
-				"wake":
-					sfx.play("roar")
-				"phase":
-					sfx.play("roar")
-				"defeated":
-					_show_victory(e)
-		"node":
-			if e.depleted:
-				sfx.play("deplete")
+			if e.event == "defeated":
+				_show_victory(e)
 	_dirty = true
 
 func _open_station(kind: String) -> void:
@@ -266,7 +234,6 @@ func open_window(w: Control) -> void:
 	if w.has_method("refresh"):
 		w.refresh()
 	w.center()
-	sfx.play("open")
 
 func close_window(w: Control) -> void:
 	if w == window:
@@ -435,7 +402,7 @@ func pick(screen: Vector2) -> Dictionary:
 			if d < lim and d < best_d * (2.0 if m.kind == "warden" else 1.0):
 				best = {"kind": "mob", "id": id}
 				best_d = d
-	var ground := main.rig.ground_point(screen, 0.0)
+	var ground: Vector3 = main.rig.ground_point(screen, 0.0)
 	var tile := Vector2i(int(floor(ground.x)), int(floor(ground.z)))
 	if best.is_empty():
 		for i in world.nodes.size():
@@ -508,7 +475,7 @@ func options_for(t: Dictionary) -> Array:
 	if t.kind == "ground" or true:
 		var tile: Vector2i = t.get("tile", Vector2i(-1, -1))
 		if t.kind != "ground":
-			var g := main.rig.ground_point(root.get_viewport().get_mouse_position(), 0.0)
+			var g: Vector3 = main.rig.ground_point(root.get_viewport().get_mouse_position(), 0.0)
 			tile = Vector2i(int(floor(g.x)), int(floor(g.z)))
 		opts.append({"label": "Walk here", "cb": func():
 			world.cmd_walk(tile)
