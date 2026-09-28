@@ -333,6 +333,11 @@ class BoardGraph extends Control:
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 
+	func _process(_d: float) -> void:
+		# Available perks pulse.
+		if world and is_visible_in_tree() and world.board_points(board) > world.board_spent(board):
+			queue_redraw()
+
 	func _perk(slot: String) -> Dictionary:
 		for p in Defs.PERKS[board]:
 			if p.slot == slot:
@@ -399,5 +404,4 @@ class BoardGraph extends Control:
 				lx = c.x + r + 6
 				ly = c.y + 4
 			draw_string(f, Vector2(lx, ly), p.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, name_col)
-		if world.board_points(board) > world.board_spent(board):
-			queue_redraw()
+

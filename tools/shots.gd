@@ -30,6 +30,23 @@ func run(main, name: String) -> void:
 			if name == "tooltip":
 				main.ui.side.show_tab("pack")
 				main.ui.show_tooltip(w.player.equipment.weapon)
+		"fight", "chop":
+			_load_up(w)
+			w.player.xp.hitpoints = float(Defs.xp_for_level(70))
+			w.player.hp = w.max_hp()
+			if name == "fight":
+				w.player.pos = Vector2i(31, 57)
+				w.player.prev_pos = w.player.pos
+				main.do_tick()
+				main.world.cmd_attack(w.warden.mob_id)
+			else:
+				w.player.pos = Vector2i(21, 26)
+				for i in w.nodes.size():
+					if w.nodes[i].pos == Vector2i(22, 26):
+						w.nodes[i].remaining = 2
+						w.cmd_gather(i)
+		"smoke":
+			await _smoke(main, w, tree)
 		"boards":
 			_load_up(w)
 			w.player.perks["first_blood"] = true
@@ -75,3 +92,70 @@ func _load_up(w: World) -> void:
 	w.player.hp = w.max_hp()
 	w.emit({"type": "equip"})
 	w.log_line("Maple level 34.")
+
+func each(main, i: int) -> void:
+	main.rig.target = main.view.player_actor.position
+
+## Drives every screen and action once so runtime errors surface headlessly.
+func _smoke(main, w: World, tree: SceneTree) -> void:
+	var ui = main.ui
+	_load_up(w)
+	for t in ["pack", "gear", "skills", "boards", "settings"]:
+		ui.side.show_tab(t)
+		await tree.process_frame
+	for k in ["stash", "anvil", "bench", "shrine", "hearth"]:
+		ui._open_station(k)
+		await tree.process_frame
+	ui.close_window(ui.window) if ui.window else null
+	# Craft at the bench with whatever maple is held.
+	var cw := Windows.CraftWindow.new()
+	cw.ui = ui
+	cw.build("fletching")
+	ui.open_window(cw)
+	await tree.process_frame
+	cw._craft()
+	await tree.process_frame
+	# Temper, salvage and equip through the UI paths.
+	w.player.perks["salvage"] = true
+	w.player.perks["guided_temper"] = true
+	var gear = w.player.equipment.weapon
+	ui.temper(gear)
+	await tree.process_frame
+	if ui.window:
+		ui.close_window(ui.window)
+	for it in w.player.pack:
+		if it != null and it.kind == "gear":
+			ui.open_item_menu(it, "pack")
+			await tree.process_frame
+			ui.menu.visible = false
+			w.equip(it.uid)
+			break
+	ui.pick(Vector2(640, 360))
+	ui.options_for(ui.pick(Vector2(640, 360)))
+	# Gather, fight, die, and fight the Warden for a while.
+	w.player.pos = Vector2i(21, 26)
+	for i in w.nodes.size():
+		if w.nodes[i].res == "pine":
+			w.cmd_gather(i)
+			break
+	for i in 30:
+		main.do_tick()
+		await tree.process_frame
+	for m in w.mobs:
+		if m.kind == "thornling" and m.alive:
+			w.cmd_attack(m.id)
+			break
+	for i in 30:
+		main.do_tick()
+		await tree.process_frame
+	w.player.pos = Vector2i(31, 57)
+	for i in 400:
+		if w.warden.active and w.player.action.is_empty():
+			w.cmd_attack(w.warden.mob_id)
+		main.do_tick()
+		await tree.process_frame
+		if not w.warden.active and i > 5:
+			w.player.pos = Vector2i(31, 57)
+			w.player.hp = w.max_hp()
+	main.save()
+	print("SMOKE ticks=%d kills=%s" % [w.tick, str(w.player.kills)])

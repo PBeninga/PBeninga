@@ -230,6 +230,7 @@ func open_window(w: Control) -> void:
 	if window:
 		close_window(window)
 	window = w
+	view.stash_open = w is Windows.StashWindow
 	root.add_child(w)
 	if w.has_method("refresh"):
 		w.refresh()
@@ -238,6 +239,7 @@ func open_window(w: Control) -> void:
 func close_window(w: Control) -> void:
 	if w == window:
 		window = null
+		view.stash_open = false
 	hide_tooltip()
 	w.queue_free()
 

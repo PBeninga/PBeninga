@@ -49,12 +49,13 @@ func _setup_environment() -> void:
 	sm.sun_angle_max = 20.0
 	sky.sky_material = sm
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.32
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color("7a6a62")
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.92
 	env.fog_enabled = true
-	env.fog_light_color = Color("a88a70")
+	env.fog_light_color = Color("6a5a50")
 	env.fog_density = 0.0045
 	env.fog_sky_affect = 0.4
 	env.glow_enabled = true
@@ -69,7 +70,7 @@ func _setup_environment() -> void:
 	add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.light_color = Color("ffd2a0")
-	sun.light_energy = 1.15
+	sun.light_energy = 1.0
 	sun.rotation_degrees = Vector3(-48, -35, 0)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 40.0
@@ -136,6 +137,17 @@ func _run_shot_script(name: String) -> void:
 	await s.run(self, name)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var img := get_viewport().get_texture().get_image()
-	img.save_png(shot.get("shot", "/tmp/shot.png"))
+	var out: String = shot.get("shot", "/tmp/shot.png")
+	var seq := int(shot.get("seq", "0"))
+	var headless := DisplayServer.get_name() == "headless"
+	if seq == 0 and not headless:
+		get_viewport().get_texture().get_image().save_png(out)
+	for i in seq:
+		for f in int(shot.get("every", "6")):
+			await get_tree().process_frame
+		if s.has_method("each"):
+			s.each(self, i)
+		if not headless:
+			get_viewport().get_texture().get_image().save_png(out.replace(".png", "_%02d.png" % i))
+	print("SHOT DONE")
 	get_tree().quit()

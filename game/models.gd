@@ -545,9 +545,71 @@ static func _warden() -> Node3D:
 
 # ================================================================ stations & props
 
+static func flame(scale_: float) -> Node3D:
+	var f := mesh_node("flame", func():
+		var k := MeshKit.new(77)
+		k.shard(Vector3.ZERO, 0.5, 0.13, EMBER, true)
+		k.shard(Vector3(0.04, 0, 0.03), 0.34, 0.09, Color("ffc060"), true)
+		k.shard(Vector3(-0.05, 0, -0.02), 0.28, 0.07, Color("ff9a40"), true, Vector3(-0.04, 0, 0))
+		return k.build())
+	f.name = "Flame"
+	f.scale = Vector3.ONE * scale_
+	var holder := Node3D.new()
+	holder.add_child(f)
+	holder.scale = Vector3.ONE * scale_
+	f.scale = Vector3.ONE
+	return holder
+
+## Slow rising sparks over a fire.
+static func embers(amount: int, spread: float) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3.ONE * 0.035
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.6, 0.7, 0.25)
+	bm.material = mat
+	p.mesh = bm
+	p.amount = amount
+	p.lifetime = 1.6
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = spread
+	p.direction = Vector3.UP
+	p.spread = 15.0
+	p.gravity = Vector3(0, 0.6, 0)
+	p.initial_velocity_min = 0.3
+	p.initial_velocity_max = 0.8
+	var curve := Curve.new()
+	curve.add_point(Vector2(0, 1))
+	curve.add_point(Vector2(1, 0))
+	p.scale_amount_curve = curve
+	return p
+
 static func station(kind: String) -> Node3D:
 	var root := Node3D.new()
 	root.add_child(mesh_node("station_" + kind, func(): return _station_mesh(kind)))
+	match kind:
+		"hearth":
+			var f := flame(1.0)
+			f.position = Vector3(0, 0.05, 0)
+			root.add_child(f)
+			var e := embers(14, 0.15)
+			e.position = Vector3(0, 0.4, 0)
+			root.add_child(e)
+		"anvil":
+			var f := flame(0.6)
+			f.position = Vector3(0, 0.48, 0.55)
+			root.add_child(f)
+		"stash":
+			var lid := Node3D.new()
+			lid.name = "Lid"
+			lid.position = Vector3(0, 0.5, 0.275)
+			var lk := MeshKit.new(122)
+			lk.box(Vector3(0, 0.07, -0.275), Vector3(0.84, 0.14, 0.59), Color("5a3a22"), false, Color("6a4428"))
+			for x in [-0.3, 0.3]:
+				lk.box(Vector3(x, 0.08, -0.275), Vector3(0.06, 0.15, 0.6), Color("4a4a4c"))
+			lid.add_child(mi(lk))
+			root.add_child(lid)
 	if kind == "hearth" or kind == "anvil":
 		var l := OmniLight3D.new()
 		l.light_color = Color("ff9a50")
@@ -578,10 +640,10 @@ static func _station_mesh(kind: String) -> Mesh:
 	match kind:
 		"stash":
 			k.box(Vector3(0, 0.25, 0), Vector3(0.8, 0.5, 0.55), Color("6a4428"), false, Color("7a5230"))
-			k.box(Vector3(0, 0.56, 0), Vector3(0.84, 0.14, 0.59), Color("5a3a22"))
 			for x in [-0.3, 0.3]:
-				k.box(Vector3(x, 0.32, 0), Vector3(0.06, 0.66, 0.6), Color("4a4a4c"))
+				k.box(Vector3(x, 0.26, 0), Vector3(0.06, 0.52, 0.6), Color("4a4a4c"))
 			k.box(Vector3(0, 0.42, -0.29), Vector3(0.12, 0.14, 0.03), GOLD)
+			k.box(Vector3(0, 0.46, 0), Vector3(0.74, 0.04, 0.5), Color("1a1410"))
 		"anvil":
 			k.prism(Vector3(0, 0, 0), 0.35, 0.3, 0.26, 7, BARK)
 			k.box(Vector3(0, 0.45, 0), Vector3(0.22, 0.2, 0.18), Color("3a3a3e"))
@@ -589,7 +651,7 @@ static func _station_mesh(kind: String) -> Mesh:
 			k.shard(Vector3(0.3, 0.6, 0), 0.2, 0.06, Color("4a4a50"), false, Vector3(0.18, -0.12, 0))
 			# Forge brazier behind.
 			k.prism(Vector3(0, 0, 0.55), 0.5, 0.3, 0.36, 8, STONE_DARK)
-			k.sphere(Vector3(0, 0.5, 0.55), Vector3(0.26, 0.12, 0.26), EMBER, 6, 2, true)
+			k.sphere(Vector3(0, 0.46, 0.55), Vector3(0.26, 0.08, 0.26), Color("ff5a20"), 6, 2, true)
 		"bench":
 			k.box(Vector3(0, 0.5, 0), Vector3(0.9, 0.08, 0.5), Color("8a5a32"), false, Color("9a6a3a"))
 			for x in [-0.38, 0.38]:
@@ -617,13 +679,19 @@ static func _station_mesh(kind: String) -> Mesh:
 			for i in 4:
 				k.with(Transform3D(Basis(Vector3.UP, i * PI / 4) * Basis(Vector3.FORWARD, PI / 2 - 0.25), Vector3(0, 0.08, 0)),
 					func(): k.prism(Vector3(0, -0.3, 0), 0.6, 0.05, 0.05, 5, BARK))
-			k.shard(Vector3(0, 0.05, 0), 0.5, 0.12, EMBER, true)
-			k.shard(Vector3(0.05, 0.05, 0.04), 0.34, 0.1, Color("ffc060"), true)
+			k.sphere(Vector3(0, 0.06, 0), Vector3(0.2, 0.05, 0.2), Color("ff5a20"), 6, 2, true)
 	return k.build()
 
 static func prop(kind: String, variant: int) -> Node3D:
 	var root := Node3D.new()
 	root.add_child(mesh_node("prop_%s_%d" % [kind, variant % 2], func(): return _prop_mesh(kind, variant % 2)))
+	if kind == "brazier":
+		var f := flame(0.9)
+		f.position = Vector3(0, 0.95, 0)
+		root.add_child(f)
+		var e := embers(10, 0.12)
+		e.position = Vector3(0, 1.3, 0)
+		root.add_child(e)
 	if kind == "brazier" or kind == "lantern":
 		var l := OmniLight3D.new()
 		l.light_color = Color("ff9a50")
@@ -645,8 +713,7 @@ static func _prop_mesh(kind: String, v: int) -> Mesh:
 		"brazier":
 			k.prism(Vector3.ZERO, 0.8, 0.18, 0.12, 6, Color("2a2624"))
 			k.prism(Vector3(0, 0.8, 0), 0.25, 0.2, 0.36, 8, Color("3a3432"))
-			k.shard(Vector3(0, 0.95, 0), 0.5, 0.18, EMBER, true)
-			k.shard(Vector3(0.05, 0.95, 0), 0.32, 0.12, Color("ffd070"), true)
+			k.sphere(Vector3(0, 0.96, 0), Vector3(0.16, 0.05, 0.16), Color("ff5a20"), 6, 2, true)
 		"lantern":
 			k.prism(Vector3.ZERO, 1.4, 0.06, 0.05, 5, BARK.darkened(0.2))
 			k.box(Vector3(0.15, 1.35, 0), Vector3(0.32, 0.05, 0.05), BARK.darkened(0.2))
