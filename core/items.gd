@@ -137,6 +137,7 @@ static func temper(item: Dictionary, skill_level: int, rng: RandomNumberGenerato
 		return -1
 	var idx: int = choice if choice in cands else cands[rng.randi_range(0, cands.size() - 1)]
 	item.mods[idx].tier = int(item.mods[idx].tier) + 1
+	item.mods[idx].tempered = int(item.mods[idx].get("tempered", 0)) + 1
 	item.tempers = int(item.tempers) + 1
 	return idx
 
