@@ -45,6 +45,22 @@ func run(main, name: String) -> void:
 					if w.nodes[i].pos == Vector2i(22, 26):
 						w.nodes[i].remaining = 2
 						w.cmd_gather(i)
+		"bestiary":
+			_load_up(w)
+			w.player.pos = Vector2i(35, 28)
+			var kinds := ["thornling", "wolf", "crawler", "golem", "revenant", "imp", "warden"]
+			for i in kinds.size():
+				var a := Actor.new()
+				a.setup(Models.creature(kinds[i]), 1.0, false, kinds[i] == "revenant", kinds[i])
+				main.view.add_child(a)
+				var tp: Vector3 = main.view.tile_pos(Vector2i(28 + i * 2, 30))
+				if kinds[i] == "warden":
+					tp += Vector3(0.5, 0, 0.5)
+				a.snap_to(tp)
+				a.rotation.y = PI
+			main.rig.pitch = deg_to_rad(22)
+			main.rig.yaw = 0.0
+			main.rig.distance = 11.0
 		"smoke":
 			await _smoke(main, w, tree)
 		"boards":

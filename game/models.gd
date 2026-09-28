@@ -218,6 +218,29 @@ static func humanoid(opts: Dictionary) -> Node3D:
 		lk.box(Vector3(0, -0.3, 0), Vector3(0.14, 0.58, 0.16), legs_col)
 		lk.box(Vector3(0, -0.58, -0.03), Vector3(0.15, 0.1, 0.22), LEATHER.darkened(0.2))
 		leg.add_child(mi(lk))
+	if opts.get("hood", false):
+		var hood := MeshKit.new(10)
+		var hc: Color = opts.get("cape_col", Color("7a2a22"))
+		hood.prism(Vector3(0, 0.02, 0.03), 0.34, 0.2, 0.08, 6, hc.darkened(0.1))
+		hood.box(Vector3(0, 0.16, 0.13), Vector3(0.28, 0.3, 0.06), hc.darkened(0.2))
+		head.add_child(mi(hood))
+	if opts.get("fantasy", false):
+		var extra := MeshKit.new(11)
+		extra.box(Vector3(0.12, 0.72, -0.14), Vector3(0.1, 0.12, 0.06), LEATHER.darkened(0.1))   # pouch
+		extra.box(Vector3(0.12, 0.8, -0.17), Vector3(0.04, 0.03, 0.01), GOLD)
+		extra.with(Transform3D(Basis(Vector3.BACK, 0.7), Vector3(0, 0.98, -0.13)), func(): extra.box(Vector3.ZERO, Vector3(0.05, 0.5, 0.02), LEATHER.darkened(0.25)))  # baldric
+		extra.box(Vector3(0, 1.13, -0.12), Vector3(0.1, 0.05, 0.03), GOLD)                        # cloak clasp
+		body.add_child(mi(extra))
+		for side in [-1, 1]:
+			var arm: Node3D = body.get_node("ArmR" if side > 0 else "ArmL")
+			var pk := MeshKit.new(12)
+			pk.sphere(Vector3(0.02 * side, 0.0, 0), Vector3(0.11, 0.07, 0.1), LEATHER.lightened(0.05), 6, 3)
+			pk.box(Vector3(0, -0.33, 0), Vector3(0.12, 0.1, 0.13), LEATHER)                      # bracer
+			arm.add_child(mi(pk))
+			var leg: Node3D = body.get_node("LegR" if side > 0 else "LegL")
+			var bk := MeshKit.new(13)
+			bk.box(Vector3(0, -0.46, -0.01), Vector3(0.17, 0.08, 0.19), LEATHER.darkened(0.1))   # boot cuff
+			leg.add_child(mi(bk))
 	if opts.get("cape", true):
 		var ck := MeshKit.new(9)
 		ck.quad(Vector3(-0.2, 1.12, 0.13), Vector3(0.2, 1.12, 0.13), Vector3(0.26, 0.5, 0.26), Vector3(-0.26, 0.5, 0.26), opts.get("cape_col", Color("7a2a22")))
@@ -228,7 +251,7 @@ static func humanoid(opts: Dictionary) -> Node3D:
 	return root
 
 static func player() -> Node3D:
-	return humanoid({"tunic": Color("5a4a3a"), "legs": Color("3a3228"), "cape_col": Color("8a2e22")})
+	return humanoid({"tunic": Color("4e5a3e"), "legs": Color("3a3228"), "cape_col": Color("8a2e22"), "hood": true, "fantasy": true})
 
 # ---------------------------------------------------------------- gear on the body
 
@@ -412,9 +435,16 @@ static func _golem() -> Node3D:
 	k.box(Vector3(0, 0.55, 0), Vector3(0.55, 0.3, 0.45), STONE_DARK.darkened(0.1))
 	k.box(Vector3(0, 1.45, -0.05), Vector3(0.36, 0.3, 0.34), STONE)
 	k.jitter = 0.0
-	k.box(Vector3(0, 0.95, -0.28), Vector3(0.1, 0.5, 0.02), EMBER, true)
-	k.box(Vector3(-0.15, 1.05, -0.28), Vector3(0.24, 0.05, 0.02), EMBER, true)
-	k.box(Vector3(0.1, 0.8, -0.28), Vector3(0.2, 0.04, 0.02), EMBER, true)
+	# Jagged magma seams across the chest.
+	var seam := [Vector3(-0.3, 1.2, 0), Vector3(-0.12, 1.05, 0), Vector3(-0.18, 0.9, 0), Vector3(0.05, 0.78, 0), Vector3(0.0, 0.66, 0)]
+	var branch := [Vector3(-0.12, 1.05, 0), Vector3(0.12, 1.12, 0), Vector3(0.28, 1.0, 0)]
+	for line in [seam, branch]:
+		for i in line.size() - 1:
+			var a: Vector3 = line[i]
+			var b: Vector3 = line[i + 1]
+			var mid := (a + b) * 0.5 + Vector3(0, 0, -0.28)
+			var ang := atan2(b.y - a.y, b.x - a.x)
+			k.with(Transform3D(Basis(Vector3.BACK, ang), mid), func(): k.box(Vector3.ZERO, Vector3(a.distance_to(b) + 0.03, 0.045, 0.02), EMBER, true))
 	k.box(Vector3(-0.08, 1.48, -0.23), Vector3(0.06, 0.05, 0.02), EMBER, true)
 	k.box(Vector3(0.08, 1.48, -0.23), Vector3(0.06, 0.05, 0.02), EMBER, true)
 	body.add_child(mi(k))
